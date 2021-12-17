@@ -1,7 +1,7 @@
 import argparse
+import os
 import subprocess
 from typing import Sequence
-import os
 
 import cv2
 import geopandas as gpd
@@ -12,9 +12,9 @@ import rasterio.mask
 import requests
 from fiona import transform
 from rasterio.crs import CRS
+from rasterstats import zonal_stats
 from shapely.geometry import Polygon, shape
 from tqdm import tqdm
-from rasterstats import zonal_stats
 
 
 def coverage(
@@ -33,19 +33,19 @@ def coverage(
 ):
     """Génère les tables et cartes d'extension de la couverture sanitaire."""
     districts = gpd.read_file(districts)
-    if not "geometry" in districts or np.count_nonzero(districts.is_valid) == 0:
+    if "geometry" not in districts or np.count_nonzero(districts.is_valid) == 0:
         raise ValueError("Le fichier de districts ne contient aucune géométrie.")
     if not districts.crs:
         districts.crs = CRS.from_epsg(4326)
 
     csi = gpd.read_file(csi)
-    if not "geometry" in csi or np.count_nonzero(csi.is_valid) == 0:
+    if "geometry" not in csi or np.count_nonzero(csi.is_valid) == 0:
         raise ValueError("Le fichier de CSI ne contient aucune géométrie.")
     if not csi.crs:
         csi.crs = CRS.from_epsg(4326)
 
     cs = gpd.read_file(cs)
-    if not "geometry" in cs or np.count_nonzero(cs.is_valid) == 0:
+    if "geometry" not in cs or np.count_nonzero(cs.is_valid) == 0:
         raise ValueError("Le fichier de CS ne contient aucune géométrie.")
     if not cs.crs:
         cs.crs = CRS.from_epsg(4326)
@@ -738,7 +738,7 @@ def analyse_cs(
         else:
             distance_csi.append(None)
     cs["distance_nearest_csi"] = distance_csi
-    return cs
+    return cs[cs.distance_nearest_csi >= 15]
 
 
 if __name__ == "__main__":
