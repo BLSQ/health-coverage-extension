@@ -1,5 +1,6 @@
 import argparse
 import os
+import shutil
 import subprocess
 from typing import Sequence
 
@@ -112,6 +113,9 @@ def coverage(
     print("Analyse le potentiel d'extension des CS...")
     potential_cs = analyse_cs(cs, csi, epsg)
     potential_cs.to_file(os.path.join(output_dir, "potential_cs.gpkg"), driver="GPKG")
+
+    shutil.rmtree(os.path.join(output_dir, "population_tiles"))
+    shutil.rmtree(os.path.join(output_dir, "worldpop"))
 
     print("Modélisation terminée !")
     return
