@@ -769,12 +769,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--min-distance-csi",
         help="Min. distance d'un CSI existant (default: %(default)s m).",
-        type=str,
+        type=int,
         default=15000,
     )
     parser.add_argument(
         "--max-distance-served",
         help="Distance de population desservie (default: %(default)s m).",
+        type=int,
         default=5000,
     )
     parser.add_argument(
