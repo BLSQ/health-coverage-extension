@@ -31,6 +31,7 @@ def coverage(
     epsg,
     un_adj,
     constrained,
+    show_progress,
 ):
     """Génère les tables et cartes d'extension de la couverture sanitaire."""
     districts = gpd.read_file(districts)
@@ -63,7 +64,7 @@ def coverage(
             year=2020,
             un_adj=un_adj,
             constrained=constrained,
-            show_progress=True,
+            show_progress=show_progress,
             overwrite=False,
         )
 
@@ -71,7 +72,7 @@ def coverage(
     dst_dir = os.path.join(output_dir, "population_tiles")
     os.makedirs(dst_dir, exist_ok=True)
     split_population_raster(
-        population, districts, output_dir=dst_dir, show_progress=True
+        population, districts, output_dir=dst_dir, show_progress=show_progress
     )
 
     print("Calcule la population desservie...")
@@ -82,6 +83,7 @@ def coverage(
         dst_file=dst_file,
         epsg=epsg,
         area_served=max_distance_served,
+        show_progress=show_progress,
     )
 
     print("Génère les zones d'extension potentielles...")
@@ -803,6 +805,9 @@ if __name__ == "__main__":
         help="[Worldpop] Utiliser le jeu de données non-contraint.",
         action="store_true",
     )
+    parser.add_argument(
+        "--no-progress", help="Pas de barre de progression", action="store_true"
+    )
 
     args = parser.parse_args()
     coverage(
@@ -818,4 +823,5 @@ if __name__ == "__main__":
         args.epsg,
         un_adj=False if args.no_un_adj else True,
         constrained=False if args.unconstrained else True,
+        show_progress=not args.no_progress,
     )
