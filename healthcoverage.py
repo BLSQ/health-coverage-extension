@@ -1,7 +1,5 @@
-import argparse
 import os
 import shutil
-import subprocess
 from typing import Sequence
 
 import cv2
@@ -10,8 +8,10 @@ import numpy as np
 import pandas as pd
 import rasterio
 import rasterio.mask
+import rasterio.merge
 import requests
 from fiona import transform
+from gooey import Gooey, GooeyParser
 from rasterio.crs import CRS
 from rasterstats import zonal_stats
 from shapely.geometry import Polygon, shape
@@ -19,19 +19,19 @@ from tqdm import tqdm
 
 
 def coverage(
-    districts,
-    csi,
-    cs,
-    population,
-    output_dir,
-    min_population,
-    min_distance_from_csi,
-    max_distance_served,
-    country,
-    epsg,
-    un_adj,
-    constrained,
-    show_progress,
+    districts: str,
+    csi: str,
+    cs: str,
+    population: str,
+    output_dir: str,
+    min_population: int,
+    min_distance_from_csi: int,
+    max_distance_served: int,
+    country: str,
+    epsg: int,
+    un_adj: bool = True,
+    constrained: bool = True,
+    show_progress: bool = False,
 ):
     """Génère les tables et cartes d'extension de la couverture sanitaire."""
     districts = gpd.read_file(districts)
@@ -56,6 +56,7 @@ def coverage(
     # TODO: What about year > 2020 ? Not sure if URL is going to be the same.
     if not population:
         print("La carte de population n'a pas été renseignée.")
+        print("Télécharge les données WorldPop...")
         dst_dir = os.path.join(output_dir, "worldpop")
         os.makedirs(dst_dir, exist_ok=True)
         population = download_worldpop(
@@ -116,8 +117,8 @@ def coverage(
     potential_cs = analyse_cs(cs, csi, epsg)
     potential_cs.to_file(os.path.join(output_dir, "potential_cs.gpkg"), driver="GPKG")
 
-    shutil.rmtree(os.path.join(output_dir, "population_tiles"))
-    shutil.rmtree(os.path.join(output_dir, "worldpop"))
+    # shutil.rmtree(os.path.join(output_dir, "population_tiles"))
+    # shutil.rmtree(os.path.join(output_dir, "worldpop"))
 
     print("Modélisation terminée !")
     return
@@ -243,6 +244,7 @@ def split_population_raster(
     districts: gpd.GeoDataFrame,
     output_dir: str,
     show_progress: bool = True,
+    overwrite: bool = False
 ):
     """Split population raster per district.
 
@@ -261,6 +263,8 @@ def split_population_raster(
         Path to output directory.
     show_progress : bool
         Show progress bar.
+    overwrite : bool
+        Overwrite existing files (default=False).
     """
     if not os.path.isfile(population_raster):
         raise ValueError(f"Population raster not found at {population_raster}.")
@@ -281,6 +285,12 @@ def split_population_raster(
             pbar = tqdm(total=len(districts_))
 
         for index, district in districts_.iterrows():
+
+            fp = os.path.join(output_dir, f"{index}.tif")
+            if os.path.isfile(fp) and not overwrite:
+                if show_progress:
+                    pbar.update(1)
+                continue
 
             # Read a window of the population raster based on
             # the district geometry.
@@ -306,8 +316,7 @@ def split_population_raster(
             dst_profile["width"] = population.shape[1]
             dst_profile["height"] = population.shape[0]
             dst_profile["dtype"] = "float32"
-            with rasterio.open(
-                os.path.join(output_dir, f"{index}.tif"),
+            with rasterio.open(fp,
                 "w",
                 **dst_profile,
             ) as dst:
@@ -427,6 +436,7 @@ def generate_population_served(
     epsg: int,
     area_served: int,
     show_progress: bool = True,
+    overwrite: bool = False
 ) -> str:
     """Compute population served per pixel.
 
@@ -452,6 +462,8 @@ def generate_population_served(
         Area served radius in meters.
     show_progress : bool, optional
         Show a progress bar.
+    overwrite : bool, optional
+        Overwrite existing files (default=False).
 
     Return
     ------
@@ -470,6 +482,13 @@ def generate_population_served(
     # i.e. once per district
     for index, district in districts.iterrows():
 
+        # skip if file has already been processed
+        fp = os.path.join(population_dir, f"{index}_served.tif")
+        if os.path.isfile(fp) and not overwrite:
+            if show_progress:
+                pbar.update(1)
+            continue
+
         population_raster = os.path.join(population_dir, f"{index}.tif")
         with rasterio.open(population_raster) as src:
             dst_profile = src.profile.copy()
@@ -479,11 +498,7 @@ def generate_population_served(
 
         dst_profile["dtype"] = "int32"
         dst_profile["nodata"] = -1
-        with rasterio.open(
-            os.path.join(population_dir, f"{index}_served.tif"),
-            "w",
-            **dst_profile,
-        ) as dst:
+        with rasterio.open(fp, "w", **dst_profile) as dst:
             dst.write(pop_sum, 1)
 
         if show_progress:
@@ -493,23 +508,29 @@ def generate_population_served(
         pbar.close()
 
     # Merge all population served tiles into a mosaic raster
-    tiles = [
-        os.path.join(population_dir, f)
-        for f in os.listdir(population_dir)
-        if f.endswith("_served.tif")
-    ]
-    command = [
-        "gdal_merge.py",
-        "-init",
-        "-1",
-        "-n",
-        "-1",
-        "-a_nodata",
-        "-1",
-        "-o",
-        dst_file,
-    ] + tiles
-    subprocess.run(command)
+    if not os.path.isfile(dst_file) or overwrite:
+        
+        print("Assemble les tiles de population...")
+        tiles = [
+            os.path.join(population_dir, f)
+            for f in os.listdir(population_dir)
+            if f.endswith("_served.tif")
+        ]
+
+        with rasterio.open(tiles[0]) as src:
+            meta = src.meta.copy()
+        
+        data, dst_transform = rasterio.merge.merge(tiles)
+        meta.update({
+            "driver": "GTiff",
+            "height": data.shape[1],
+            "width": data.shape[2],
+            "transform": dst_transform
+        })
+
+        with rasterio.open(dst_file, "w", **meta) as dst:
+            dst.write(data)
+
     return dst_file
 
 
@@ -747,81 +768,131 @@ def analyse_cs(
     return cs[cs.distance_nearest_csi >= 15]
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Module d'extension de la couverture sanitaire."
+@Gooey(
+    program_name="Module d'extension de la couverture santé",
+    default_size=(800, 600),
+    required_cols=1,
+    optional_cols=1,
+    navigation="tabbed",
+    progress_regex=r"^progress: (\d+)%$"
+)
+def app():
+
+    parser = GooeyParser(description="Module d'extension de la couverture santé")
+    general = parser.add_argument_group("Général")
+    fosa = parser.add_argument_group("Formations sanitaires")
+    dhis2 = parser.add_argument_group("DHIS2")
+    modeling = parser.add_argument_group("Modélisation")
+    worldpop = parser.add_argument_group("WorldPop")
+
+    general.add_argument(
+        "--districts",
+        metavar="Districts",
+        help="Fichier des districts (Shapefile, Geopackage, ou GeoJSON)",
+        required=True,
+        widget="FileChooser",
     )
 
-    parser.add_argument(
-        "--output-dir", required=True, help="Dossier de sortie.", type=str
-    )
-    parser.add_argument(
-        "--districts",
+    fosa.add_argument(
+        "--csi",
+        metavar="Centres de santé",
+        help="Fichier des centres de santé (Shapefile, Geopackage, ou GeoJSON)",
         required=True,
-        help="Districts de santé (GPKG, SHP, GeoJSON).",
-        type=str,
+        widget="FileChooser",
     )
-    parser.add_argument(
-        "--csi", required=True, help="Centres de santé (GPKG, SHP, GeoJSON).", type=str
+
+    fosa.add_argument(
+        "--cs",
+        metavar="Cases de santé",
+        help="Fichier des cases de santé (Shapefile, Geopackage, ou GeoJSON)",
+        required=True,
+        widget="FileChooser",
     )
-    parser.add_argument(
-        "--cs", required=True, help="Cases de santé (GPKG, SHP, GeoJSON).", type=str
+
+    dhis2.add_argument(
+        "--dhis2-instance", metavar="Instance DHIS2", help="URL de l'instance DHIS2"
     )
-    parser.add_argument("--population", help="Carte de population (GeoTIFF).", type=str)
-    parser.add_argument(
+
+    dhis2.add_argument(
+        "--dhis2-username", metavar="Utilisateur DHIS2", help="Nom d'utilisateur DHIS2"
+    )
+
+    dhis2.add_argument(
+        "--dhis2-password",
+        metavar="Mot de passe DHIS2",
+        help="Mot de passe DHIS2",
+        widget="PasswordField",
+    )
+
+    general.add_argument(
+        "--output-dir",
+        metavar="Dossier de sortie",
+        help="Dossier où enregistrer les résultats",
+        required=True,
+        widget="DirChooser",
+    )
+
+    modeling.add_argument(
         "--min-distance-csi",
-        help="Min. distance d'un CSI existant (default: %(default)s m).",
+        metavar="Distance minimum",
         type=int,
+        help="Distance minimum entre un nouveau CSI et un CSI existant (en mètres)",
         default=15000,
     )
-    parser.add_argument(
+
+    modeling.add_argument(
         "--max-distance-served",
-        help="Distance de population desservie (default: %(default)s m).",
+        metavar="Distance desservie",
         type=int,
+        help="Rayon autour d'un CSI autour duquel la population est desservie (en mètres)",
         default=5000,
     )
-    parser.add_argument(
+
+    modeling.add_argument(
         "--min-population",
-        help="Min. population desservie (default: %(default)s m).",
+        metavar="Population desservie minimum",
         type=int,
+        help="Population desservie minimum pour qu'une CS soit considérée pour conversion vers un CSI",
         default=5000,
     )
-    parser.add_argument(
-        "--country", help="Code pays (default: %(default)s).", type=str, default="NER"
-    )
-    parser.add_argument(
-        "--epsg",
-        help="CRS utilisé pour calculer les distances (default: %(default)s).",
-        type=int,
-        default=32632,
-    )
-    parser.add_argument(
-        "--no-un-adj",
-        help="[Worldpop] Ne pas utiliser l'ajustement UN.",
+
+    general.add_argument("--country", metavar="Pays", help="Code pays", type=str, default="NER")
+
+    general.add_argument("--epsg", metavar="EPSG", help="EPSG code", type=int, default=32632)
+
+    worldpop.add_argument(
+        "--un-adj",
+        metavar="UN ajustement",
         action="store_true",
+        help="Utiliser les données WorldPop ajustées aux prédictions des Nations Unies",
+        default=True,
     )
-    parser.add_argument(
+
+    worldpop.add_argument(
         "--unconstrained",
-        help="[Worldpop] Utiliser le jeu de données non-contraint.",
+        metavar="Non-contraint",
         action="store_true",
-    )
-    parser.add_argument(
-        "--no-progress", help="Désactiver la barre de progression", action="store_true"
+        help="Utiliser les données WorldPop non-contraintes",
+        default=False,
     )
 
     args = parser.parse_args()
+
     coverage(
-        args.districts,
-        args.csi,
-        args.cs,
-        args.population,
-        args.output_dir,
-        args.min_population,
-        args.min_distance_csi,
-        args.max_distance_served,
-        args.country,
-        args.epsg,
-        un_adj=False if args.no_un_adj else True,
+        districts=args.districts,
+        csi=args.csi,
+        cs=args.cs,
+        population=None,
+        output_dir=args.output_dir,
+        min_population=args.min_population,
+        min_distance_from_csi=args.min_distance_csi,
+        max_distance_served=args.max_distance_served,
+        country=args.country,
+        epsg=args.epsg,
+        un_adj=args.un_adj,
         constrained=False if args.unconstrained else True,
-        show_progress=not args.no_progress,
     )
+
+
+if __name__ == "__main__":
+    app()
