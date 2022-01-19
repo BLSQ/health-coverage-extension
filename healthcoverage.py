@@ -1,4 +1,3 @@
-import argparse
 import os
 import shutil
 import subprocess
@@ -12,6 +11,7 @@ import rasterio
 import rasterio.mask
 import requests
 from fiona import transform
+from gooey import Gooey, GooeyParser
 from rasterio.crs import CRS
 from rasterstats import zonal_stats
 from shapely.geometry import Polygon, shape
@@ -747,81 +747,127 @@ def analyse_cs(
     return cs[cs.distance_nearest_csi >= 15]
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Module d'extension de la couverture sanitaire."
+@Gooey(
+    program_name="Module d'extension de la couverture santé",
+    default_size=(800, 600),
+    required_cols=1,
+    optional_cols=1,
+    navigation="tabbed",
+)
+def app():
+
+    parser = GooeyParser(description="Module d'extension de la couverture santé")
+    general = parser.add_argument_group("Général")
+    fosa = parser.add_argument_group("Formations sanitaires")
+    dhis2 = parser.add_argument_group("DHIS2")
+    modeling = parser.add_argument_group("Modélisation")
+    worldpop = parser.add_argument_group("WorldPop")
+
+    general.add_argument(
+        "--districts",
+        metavar="Districts",
+        help="Fichier des districts (Shapefile, Geopackage, ou GeoJSON)",
+        required=True,
+        widget="FileChooser",
     )
 
-    parser.add_argument(
-        "--output-dir", required=True, help="Dossier de sortie.", type=str
-    )
-    parser.add_argument(
-        "--districts",
+    fosa.add_argument(
+        "--csi",
+        metavar="Centres de santé",
+        help="Fichier des centres de santé (Shapefile, Geopackage, ou GeoJSON)",
         required=True,
-        help="Districts de santé (GPKG, SHP, GeoJSON).",
-        type=str,
+        widget="FileChooser",
     )
-    parser.add_argument(
-        "--csi", required=True, help="Centres de santé (GPKG, SHP, GeoJSON).", type=str
+
+    fosa.add_argument(
+        "--cs",
+        metavar="Cases de santé",
+        help="Fichier des cases de santé (Shapefile, Geopackage, ou GeoJSON)",
+        required=True,
+        widget="FileChooser",
     )
-    parser.add_argument(
-        "--cs", required=True, help="Cases de santé (GPKG, SHP, GeoJSON).", type=str
+
+    dhis2.add_argument(
+        "--dhis2-instance", metavar="Instance DHIS2", help="URL de l'instance DHIS2"
     )
-    parser.add_argument("--population", help="Carte de population (GeoTIFF).", type=str)
-    parser.add_argument(
+
+    dhis2.add_argument(
+        "--dhis2-username", metavar="Utilisateur DHIS2", help="Nom d'utilisateur DHIS2"
+    )
+
+    dhis2.add_argument(
+        "--dhis2-password",
+        metavar="Mot de passe DHIS2",
+        help="Mot de passe DHIS2",
+        widget="PasswordField",
+    )
+
+    general.add_argument(
+        "--output-dir",
+        metavar="Dossier de sortie",
+        help="Dossier où enregistrer les résultats",
+        required=True,
+        widget="DirChooser",
+    )
+
+    modeling.add_argument(
         "--min-distance-csi",
-        help="Min. distance d'un CSI existant (default: %(default)s m).",
-        type=int,
+        metavar="Distance minimum",
+        help="Distance minimum entre un nouveau CSI et un CSI existant (en mètres)",
         default=15000,
     )
-    parser.add_argument(
+
+    modeling.add_argument(
         "--max-distance-served",
-        help="Distance de population desservie (default: %(default)s m).",
-        type=int,
+        metavar="Distance desservie",
+        help="Rayon autour d'un CSI autour duquel la population est desservie (en mètres)",
         default=5000,
     )
-    parser.add_argument(
+
+    modeling.add_argument(
         "--min-population",
-        help="Min. population desservie (default: %(default)s m).",
-        type=int,
+        metavar="Population desservie minimum",
+        help="Population desservie minimum pour qu'une CS soit considérée pour conversion vers un CSI",
         default=5000,
     )
-    parser.add_argument(
-        "--country", help="Code pays (default: %(default)s).", type=str, default="NER"
-    )
-    parser.add_argument(
-        "--epsg",
-        help="CRS utilisé pour calculer les distances (default: %(default)s).",
-        type=int,
-        default=32632,
-    )
-    parser.add_argument(
-        "--no-un-adj",
-        help="[Worldpop] Ne pas utiliser l'ajustement UN.",
+
+    general.add_argument("--country", metavar="Pays", help="Code pays", default="NER")
+
+    general.add_argument("--epsg", metavar="EPSG", help="EPSG code", default=32632)
+
+    worldpop.add_argument(
+        "--un-adj",
+        metavar="UN ajustement",
         action="store_true",
+        help="Utiliser les données WorldPop ajustées aux prédictions des Nations Unies",
+        default=True,
     )
-    parser.add_argument(
+
+    worldpop.add_argument(
         "--unconstrained",
-        help="[Worldpop] Utiliser le jeu de données non-contraint.",
+        metavar="Non-contraint",
         action="store_true",
-    )
-    parser.add_argument(
-        "--no-progress", help="Désactiver la barre de progression", action="store_true"
+        help="Utiliser les données WorldPop non-contraintes",
+        default=False,
     )
 
     args = parser.parse_args()
+
     coverage(
-        args.districts,
-        args.csi,
-        args.cs,
-        args.population,
-        args.output_dir,
-        args.min_population,
-        args.min_distance_csi,
-        args.max_distance_served,
-        args.country,
-        args.epsg,
+        districts=args.districts,
+        csi=args.csi,
+        cs=args.cs,
+        population=None,
+        output_dir=args.output_dir,
+        min_population=args.min_population,
+        min_distance_from_csi=args.min_distance_csi,
+        max_distance_served=args.max_distance_served,
+        country=args.country,
+        epsg=args.epsg,
         un_adj=False if args.no_un_adj else True,
         constrained=False if args.unconstrained else True,
-        show_progress=not args.no_progress,
     )
+
+
+if __name__ == "__main__":
+    app()
