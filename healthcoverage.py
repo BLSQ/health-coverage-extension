@@ -806,7 +806,7 @@ if __name__ == "__main__":
         action="store_true",
     )
     parser.add_argument(
-        "--no-progress", help="Pas de barre de progression", action="store_true"
+        "--no-progress", help="Désactiver la barre de progression", action="store_true"
     )
 
     args = parser.parse_args()

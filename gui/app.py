@@ -180,7 +180,6 @@ def main():
         if p.returncode != 0:
             raise Exception("Error")
 
-        shutil.rmtree(os.path.join(tmp_dir, "output", "population_tiles"))
         os.makedirs(args.output_dir, exist_ok=True)
         shutil.copytree(
             os.path.join(tmp_dir, "output"), args.output_dir, dirs_exist_ok=True
