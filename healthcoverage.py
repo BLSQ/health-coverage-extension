@@ -1,5 +1,7 @@
 import os
+import codecs
 import shutil
+import sys
 from typing import Sequence
 
 import cv2
@@ -16,6 +18,12 @@ from rasterio.crs import CRS
 from rasterstats import zonal_stats
 from shapely.geometry import Polygon, shape
 from tqdm import tqdm
+
+
+if sys.stdout.encoding != 'UTF-8':
+    sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')
+if sys.stderr.encoding != 'UTF-8':
+    sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer, 'strict')
 
 
 def coverage(
@@ -55,8 +63,8 @@ def coverage(
     # Automatically download Worldpop data if needed
     # TODO: What about year > 2020 ? Not sure if URL is going to be the same.
     if not population:
-        print("La carte de population n'a pas été renseignée.")
-        print("Télécharge les données WorldPop...")
+        print("La carte de population n'a pas été renseignée.", flush=True)
+        print("Télécharge les données WorldPop...", flush=True)
         dst_dir = os.path.join(output_dir, "worldpop")
         os.makedirs(dst_dir, exist_ok=True)
         population = download_worldpop(
@@ -69,14 +77,14 @@ def coverage(
             overwrite=False,
         )
 
-    print("Génère les tiles de population pour chaque district...")
+    print("Génère les tiles de population pour chaque district...", flush=True)
     dst_dir = os.path.join(output_dir, "population_tiles")
     os.makedirs(dst_dir, exist_ok=True)
     split_population_raster(
         population, districts, output_dir=dst_dir, show_progress=show_progress
     )
 
-    print("Calcule la population desservie...")
+    print("Calcule la population desservie...", flush=True)
     dst_file = os.path.join(dst_dir, "population_served.tif")
     served = generate_population_served(
         districts,
@@ -87,7 +95,7 @@ def coverage(
         show_progress=show_progress,
     )
 
-    print("Génère les zones d'extension potentielles...")
+    print("Génère les zones d'extension potentielles...", flush=True)
     dst_file = os.path.join(output_dir, "priority_areas.tif")
     priority_areas = generate_priority_areas(
         population_served=served,
@@ -98,29 +106,29 @@ def coverage(
         min_dist_from_csi=min_distance_from_csi,
     )
 
-    print("Calcule la population desservie par chaque CSI...")
+    print("Calcule la population desservie par chaque CSI...", flush=True)
     column = f"population_{int(max_distance_served / 1000)}km"
     csi[column] = population_served_per_fosa(csi, served)
     csi.to_file(os.path.join(output_dir, "csi_population.gpkg"), driver="GPKG")
 
-    print("Calcule la population desservie par chaque CS...")
+    print("Calcule la population desservie par chaque CS...", flush=True)
     cs[column] = population_served_per_fosa(cs, served)
     cs.to_file(os.path.join(output_dir, "cs_population.gpkg"), driver="GPKG")
 
-    print("Analyse les zones potentielles d'extension...")
+    print("Analyse les zones potentielles d'extension...", flush=True)
     potential_areas = analyse_potential_areas(priority_areas, csi, epsg, min_population)
     potential_areas.to_file(
         os.path.join(output_dir, "potential_areas.gpkg"), driver="GPKG"
     )
 
-    print("Analyse le potentiel d'extension des CS...")
+    print("Analyse le potentiel d'extension des CS...", flush=True)
     potential_cs = analyse_cs(cs, csi, epsg)
     potential_cs.to_file(os.path.join(output_dir, "potential_cs.gpkg"), driver="GPKG")
 
     # shutil.rmtree(os.path.join(output_dir, "population_tiles"))
     # shutil.rmtree(os.path.join(output_dir, "worldpop"))
 
-    print("Modélisation terminée !")
+    print("Modélisation terminée !", flush=True)
     return
 
 
@@ -207,10 +215,10 @@ def download_worldpop(
 
     fp = os.path.join(output_dir, url.split("/")[-1])
     if os.path.isfile(fp) and not overwrite:
-        print("Données de population déjà téléchargées.")
+        print("Données de population déjà téléchargées.", flush=True)
         return fp
 
-    print(f"Téléchargement des données de population depuis {url}.")
+    print(f"Téléchargement des données de population depuis {url}.", flush=True)
     with requests.get(url, stream=True, timeout=120) as r:
         r.raise_for_status()
 
@@ -235,7 +243,7 @@ def download_worldpop(
         if show_progress:
             pbar.close()
 
-    print(f"Données de population téléchargées dans {output_dir}.")
+    print(f"Données de population téléchargées dans {output_dir}.", flush=True)
     return fp
 
 
@@ -510,7 +518,7 @@ def generate_population_served(
     # Merge all population served tiles into a mosaic raster
     if not os.path.isfile(dst_file) or overwrite:
         
-        print("Assemble les tiles de population...")
+        print("Assemble les tiles de population...", flush=True)
         tiles = [
             os.path.join(population_dir, f)
             for f in os.listdir(population_dir)
