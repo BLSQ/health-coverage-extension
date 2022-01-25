@@ -793,7 +793,7 @@ def app():
     modeling = parser.add_argument_group("Modélisation")
     worldpop = parser.add_argument_group("WorldPop")
 
-    general.add_argument(
+    fosa.add_argument(
         "--districts",
         metavar="Districts",
         help="Fichier des districts (Shapefile, Geopackage, ou GeoJSON)",
@@ -817,6 +817,14 @@ def app():
         widget="FileChooser",
     )
 
+    general.add_argument(
+        "--output-dir",
+        metavar="Dossier de sortie",
+        help="Dossier où enregistrer les résultats",
+        required=True,
+        widget="DirChooser",
+    )
+
     dhis2.add_argument(
         "--dhis2-instance", metavar="Instance DHIS2", help="URL de l'instance DHIS2"
     )
@@ -830,14 +838,6 @@ def app():
         metavar="Mot de passe DHIS2",
         help="Mot de passe DHIS2",
         widget="PasswordField",
-    )
-
-    general.add_argument(
-        "--output-dir",
-        metavar="Dossier de sortie",
-        help="Dossier où enregistrer les résultats",
-        required=True,
-        widget="DirChooser",
     )
 
     modeling.add_argument(
