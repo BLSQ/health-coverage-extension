@@ -1395,6 +1395,14 @@ def app():
     )
 
     general.add_argument(
+        "--output-dir",
+        metavar="Dossier de sortie",
+        help="Dossier où enregistrer les résultats",
+        required=True,
+        widget="DirChooser",
+    )
+
+    general.add_argument(
         "--country", metavar="Pays", help="Code pays (ISO-A3)", type=str, default="NER"
     )
 
