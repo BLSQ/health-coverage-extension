@@ -1,7 +1,7 @@
 import codecs
 import os
 import sys
-from typing import Sequence
+from typing import List, Sequence, Tuple
 
 import cv2
 import geopandas as gpd
@@ -11,6 +11,7 @@ import rasterio
 import rasterio.mask
 import rasterio.merge
 import requests
+from dhis2 import Api
 from fiona import transform
 from gooey import Gooey, GooeyParser
 from rasterio.crs import CRS
@@ -49,23 +50,28 @@ def coverage(
     show_progress: bool = False,
 ):
     """Génère les tables et cartes d'extension de la couverture sanitaire."""
-    districts = gpd.read_file(districts)
-    if "geometry" not in districts or np.count_nonzero(districts.is_valid) == 0:
-        raise ValueError("Le fichier de districts ne contient aucune géométrie.")
-    if not districts.crs:
-        districts.crs = CRS.from_epsg(4326)
+    districts = load_districts(
+        src_file=districts,
+        dhis2_instance=dhis2_instance,
+        dhis2_username=dhis2_username,
+        dhis2_password=dhis2_password,
+    )
 
-    csi = gpd.read_file(csi)
-    if "geometry" not in csi or np.count_nonzero(csi.is_valid) == 0:
-        raise ValueError("Le fichier de CSI ne contient aucune géométrie.")
-    if not csi.crs:
-        csi.crs = CRS.from_epsg(4326)
+    csi = load_csi(
+        src_file=csi,
+        dhis2_instance=dhis2_instance,
+        dhis2_username=dhis2_username,
+        dhis2_password=dhis2_password,
+        dhis2_groups=csi_groups,
+    )
 
-    cs = gpd.read_file(cs)
-    if "geometry" not in cs or np.count_nonzero(cs.is_valid) == 0:
-        raise ValueError("Le fichier de CS ne contient aucune géométrie.")
-    if not cs.crs:
-        cs.crs = CRS.from_epsg(4326)
+    cs = load_cs(
+        src_file=cs,
+        dhis2_instance=dhis2_instance,
+        dhis2_username=dhis2_username,
+        dhis2_password=dhis2_password,
+        dhis2_groups=cs_groups,
+    )
 
     # Automatically download Worldpop data if needed
     # TODO: What about year > 2020 ? Not sure if URL is going to be the same.
@@ -137,6 +143,310 @@ def coverage(
 
     print("Modélisation terminée !", flush=True)
     return
+
+
+def org_units_metadata(
+    username: str,
+    password: str,
+    server: str = "http://dhis2.snisniger.ne",
+    timeout: int = 60,
+) -> pd.DataFrame:
+    """Get organisation units metadata from a DHIS2 instance.
+
+    Parameters
+    ----------
+    username : str
+        DHIS2 username.
+    password : str
+        DHIS2 password.
+    server : str, optional
+        DHIS2 instance URL.
+        dhis2.snis.niger.ne by default.
+    timeout : int, optional
+        Request timeout in seconds (60s by default).
+
+    Return
+    ------
+    dataframe
+        Org units metadata (one row per org unit).
+    """
+    api = Api(
+        server=server,
+        username=username,
+        password=password,
+        user_agent="blsq/health-coverage-extension",
+    )
+    r = api.get(
+        "metadata",
+        params={"organisationUnits": True, "organisationUnitGroups": True},
+        timeout=timeout,
+    )
+    org_units = pd.DataFrame(r.json().get("organisationUnits"))
+    org_units.set_index("id", inplace=True, drop=False)
+    org_unit_groups = pd.DataFrame(r.json().get("organisationUnitGroups"))
+    org_unit_groups.set_index("id", inplace=True, drop=False)
+    return org_units, org_unit_groups
+
+
+def org_units_in_group(org_unit_groups: pd.DataFrame, group_uid: str) -> List[str]:
+    """Get list of org units UIDs in a group."""
+    if group_uid not in org_unit_groups.index:
+        raise ValueError(f"DHIS2 org unit group {group_uid} not found.")
+    return [
+        ou.get("id") for ou in org_unit_groups.at[group_uid, "organisationUnits"] if ou
+    ]
+
+
+def extract_org_units(
+    org_units: pd.DataFrame,
+    org_unit_groups: pd.DataFrame,
+    groups_included: List[str] = None,
+    groups_excluded: List[str] = None,
+    levels_included: List[int] = None,
+    geom_types: List[str] = ["Point"],
+):
+    """Extract all org units based on their group and hierarchical lvl.
+
+    Org unit groups can be either whitelisted or blacklisted. Both
+    parameters can be used at the same time. Hierarchical levels can
+    only be whitelisted.
+
+    Parameters
+    ----------
+    org_units : pd.DataFrame
+        Org units metadata.
+    org_unit_groups : pd.DataFrame
+        Org unit groups metadata.
+    groups_included : list of str, optional
+        List of included group UIDs.
+    groups_excluded : list of str, optional
+        List of excluded group UIDs.
+    levels_included : list of int, optional
+        List of levels included.
+    geom_types : list of str, optional
+        Allowed geometry types.
+
+    Return
+    ------
+    geodataframe
+        Extracted org units.
+    """
+    ou_uids = list(org_units.index)
+
+    if levels_included:
+        ou_uids = [
+            uid for uid in ou_uids if org_units.at[uid, "level"] in levels_included
+        ]
+
+    if groups_included:
+        included = []
+        for group in groups_included:
+            included += org_units_in_group(org_unit_groups, group)
+        ou_uids = [uid for uid in ou_uids if uid in included]
+
+    if groups_excluded:
+        excluded = []
+        for group in groups_excluded:
+            excluded += org_units_in_group(org_unit_groups, group)
+        ou_uids = [uid for uid in ou_uids if uid not in excluded]
+
+    org_units_ = org_units.loc[ou_uids]
+
+    # create new columns with full pyramid information
+
+    def _uid_from_path(path: str, lvl: int):
+        org_units = [ou for ou in path.split("/") if ou]
+        if len(org_units) >= lvl:
+            return org_units[lvl - 1]
+        return None
+
+    def _name_from_uid(org_units: pd.DataFrame, uid: str):
+        if not uid:
+            return None
+        return org_units.at[uid, "name"]
+
+    for lvl in range(1, 7):
+        org_units_[f"level_{lvl}_uid"] = org_units_.path.apply(
+            lambda path: _uid_from_path(path, lvl)
+        )
+
+    for lvl in range(1, 7):
+        org_units_[f"level_{lvl}_name"] = org_units_[f"level_{lvl}_uid"].apply(
+            lambda uid: _name_from_uid(org_units, uid)
+        )
+
+    # to geodataframe
+    org_units_ = org_units_[~pd.isna(org_units_.geometry)]
+    org_units_["geom"] = org_units_.geometry.apply(shape)
+    org_units_ = gpd.GeoDataFrame(org_units_, crs=CRS.from_epsg(4326), geometry="geom")
+
+    # drop irrelevant columns
+    columns = [col for col in org_units_.columns if col.startswith("level_")]
+    columns.append("level")
+    columns.append("geom")
+    org_units_ = org_units_[columns]
+
+    # rename geometry column
+    org_units_.rename(columns={"geom": "geometry"}, inplace=True)
+
+    # filter by geom type
+    org_units_ = org_units_[np.isin(org_units_.geom_type, geom_types)]
+
+    return org_units_.dropna(axis=1, how="all")
+
+
+def load_districts(
+    src_file: str, dhis2_instance: str, dhis2_username: str, dhis2_password: str
+) -> gpd.GeoDataFrame:
+    """Load districts geometries from source file or DHIS2."""
+    # From source file
+    if src_file:
+        districts = gpd.read_file(src_file)
+        n_geoms = sum(districts.geometry.is_valid)
+        if n_geoms == 0:
+            raise ValueError("Le fichier de districts ne contient aucune géométrie.")
+        print(f"Districts: {n_geoms} géométries détectées.")
+
+    # If not provided and DHIS2 credentials are set, use it
+    elif dhis2_instance and dhis2_username and dhis2_password:
+        org_units_meta, groups_meta = org_units_metadata(
+            username=dhis2_username,
+            password=dhis2_password,
+            server=dhis2_instance,
+            timeout=60,
+        )
+        districts = extract_org_units(
+            org_units_meta,
+            groups_meta,
+            levels_included=[3],  # this should be a parameter
+            geom_types=["Polygon", "MultiPolygon"],
+        )
+        print(f"{len(districts)} districts importés depuis DHIS2.")
+    else:
+        raise ValueError(
+            "Ni fichier de districts ni crédentiels DHIS2 n'ont été fournis."
+        )
+
+    if not districts.crs:
+        districts.crs = CRS.from_epsg(4326)
+
+    return districts
+
+
+def _parse_dhis2_groups(dhis2_groups: str) -> Tuple[List[str], List[str]]:
+    """Parse string with DHIS2 groups info.
+
+    Parameters
+    ----------
+    dhis2_groups : str
+        Space-separated list of DHIS2 group UIDs with excluded
+        groups prefixed with "-".
+
+    Return
+    ------
+    list of str
+        List of groups to include.
+    list of str
+        List of groups to exclude.
+    """
+    include, exclude = [], []
+    dhis2_groups = dhis2_groups.strip()
+    for group in dhis2_groups.split(" "):
+        if group.startswith("-"):
+            exclude.append(group[1:])
+        else:
+            include.append(group)
+    return include, exclude
+
+
+def load_csi(
+    src_file: str,
+    dhis2_instance: str,
+    dhis2_username: str,
+    dhis2_password: str,
+    dhis2_groups: str,
+) -> gpd.GeoDataFrame:
+    """Load CSI geometries from source file or DHIS2."""
+    # from source file
+    if src_file:
+        csi = gpd.read_file(src_file)
+        n_geoms = sum(csi.geometry.is_valid)
+        if n_geoms == 0:
+            raise ValueError("Le fichier de CSI ne contient aucune géométrie.")
+        print(f"CSI: {n_geoms} géométries détectées.")
+
+    # if not provided and DHIS2 credentials are set, extract from DHIS2
+    elif dhis2_instance and dhis2_username and dhis2_password and dhis2_groups:
+        org_units_meta, groups_meta = org_units_metadata(
+            username=dhis2_username,
+            password=dhis2_password,
+            server=dhis2_instance,
+            timeout=60,
+        )
+        included, excluded = _parse_dhis2_groups(dhis2_groups)
+        csi = extract_org_units(
+            org_units_meta,
+            groups_meta,
+            groups_included=included,
+            groups_excluded=excluded,
+            levels_included=[5],
+            geom_types=["Point"],
+        )
+        print(f"{len(csi)} CSI importés depuis DHIS2.")
+
+    # raise error if no source file and no DHIS2 credentials
+    else:
+        raise ValueError("Ni fichier de CSI ni crédentiels DHIS2 n'ont été fournis.")
+
+    if not csi.crs:
+        csi.crs = CRS.from_epsg(4326)
+
+    return csi
+
+
+def load_cs(
+    src_file: str,
+    dhis2_instance: str,
+    dhis2_username: str,
+    dhis2_password: str,
+    dhis2_groups: str,
+) -> gpd.GeoDataFrame:
+    """Load cases de santé geometries from source file or DHIS2."""
+    # from source file
+    if src_file:
+        cs = gpd.read_file(src_file)
+        n_geoms = sum(cs.geometry.is_valid)
+        if n_geoms == 0:
+            raise ValueError("Le fichier de CS ne contient aucune géométrie.")
+        print(f"CS: {n_geoms} géométries détectées.")
+
+    # if not provided and DHIS2 credentials are set, extract from DHIS2
+    elif dhis2_instance and dhis2_username and dhis2_password and dhis2_groups:
+        org_units_meta, groups_meta = org_units_metadata(
+            username=dhis2_username,
+            password=dhis2_password,
+            server=dhis2_instance,
+            timeout=60,
+        )
+        included, excluded = _parse_dhis2_groups(dhis2_groups)
+        cs = extract_org_units(
+            org_units_meta,
+            groups_meta,
+            groups_included=included,
+            groups_excluded=excluded,
+            levels_included=[5],
+            geom_types=["Point"],
+        )
+        print(f"{len(cs)} CS importés depuis DHIS2.")
+
+    # raise error if no source file and no DHIS2 credentials
+    else:
+        raise ValueError("Ni fichier de CSI ni crédentiels DHIS2 n'ont été fournis.")
+
+    if not cs.crs:
+        cs.crs = CRS.from_epsg(4326)
+
+    return cs
 
 
 def _build_worldpop_url(country, year, un_adj=True, constrained=True):
