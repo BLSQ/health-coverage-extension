@@ -290,7 +290,7 @@ def extract_org_units(
     # filter by geom type
     org_units_ = org_units_[np.isin(org_units_.geom_type, geom_types)]
 
-    return org_units_.dropna(axis=1, how="all")
+    return gpd.GeoDataFrame(org_units_.dropna(axis=1, how="all"))
 
 
 def load_districts(
