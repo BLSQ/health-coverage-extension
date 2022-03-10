@@ -526,7 +526,7 @@ def load_population(
         overwrite=False,
     )
 
-    pass
+    return population
 
 
 def population_from_excel(
