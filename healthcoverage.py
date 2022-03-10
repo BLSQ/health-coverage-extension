@@ -15,8 +15,11 @@ from dhis2 import Api
 from fiona import transform
 from gooey import Gooey, GooeyParser
 from rasterio.crs import CRS
+from rasterio.features import rasterize
+from rasterio.transform import from_origin
+from rasterio.warp import aligned_target, transform_bounds
 from rasterstats import zonal_stats
-from shapely.geometry import Polygon, shape
+from shapely.geometry import Point, Polygon, shape
 from tqdm import tqdm
 
 if sys.stdout.encoding != "UTF-8":
@@ -73,22 +76,17 @@ def coverage(
         dhis2_groups=cs_groups,
     )
 
-    # Automatically download Worldpop data if needed
-    # TODO: What about year > 2020 ? Not sure if URL is going to be the same.
-    if not population:
-        print("La carte de population n'a pas été renseignée.", flush=True)
-        print("Télécharge les données WorldPop...", flush=True)
-        dst_dir = os.path.join(output_dir, "worldpop")
-        os.makedirs(dst_dir, exist_ok=True)
-        population = download_worldpop(
-            country=country,
-            output_dir=dst_dir,
-            year=2020,
-            un_adj=un_adj,
-            constrained=constrained,
-            show_progress=show_progress,
-            overwrite=False,
-        )
+    population = load_population(
+        src_file=population,
+        lon_column=population_lon,
+        lat_column=population_lat,
+        pop_column=population_count,
+        country=country,
+        un_adj=un_adj,
+        constrained=constrained,
+        dst_crs=CRS.from_epsg(epsg),
+        dst_dir=os.path.join(output_dir, "population"),
+    )
 
     print("Génère les tiles de population pour chaque district...", flush=True)
     dst_dir = os.path.join(output_dir, "population_tiles")
@@ -305,7 +303,7 @@ def load_districts(
         n_geoms = sum(districts.geometry.is_valid)
         if n_geoms == 0:
             raise ValueError("Le fichier de districts ne contient aucune géométrie.")
-        print(f"Districts: {n_geoms} géométries détectées.")
+        print(f"Districts: {n_geoms} géométries détectées.", flush=True)
 
     # If not provided and DHIS2 credentials are set, use it
     elif dhis2_instance and dhis2_username and dhis2_password:
@@ -321,7 +319,7 @@ def load_districts(
             levels_included=[3],  # this should be a parameter
             geom_types=["Polygon", "MultiPolygon"],
         )
-        print(f"{len(districts)} districts importés depuis DHIS2.")
+        print(f"{len(districts)} districts importés depuis DHIS2.", flush=True)
     else:
         raise ValueError(
             "Ni fichier de districts ni crédentiels DHIS2 n'ont été fournis."
@@ -373,7 +371,7 @@ def load_csi(
         n_geoms = sum(csi.geometry.is_valid)
         if n_geoms == 0:
             raise ValueError("Le fichier de CSI ne contient aucune géométrie.")
-        print(f"CSI: {n_geoms} géométries détectées.")
+        print(f"CSI: {n_geoms} géométries détectées.", flush=True)
 
     # if not provided and DHIS2 credentials are set, extract from DHIS2
     elif dhis2_instance and dhis2_username and dhis2_password and dhis2_groups:
@@ -392,7 +390,7 @@ def load_csi(
             levels_included=[5],
             geom_types=["Point"],
         )
-        print(f"{len(csi)} CSI importés depuis DHIS2.")
+        print(f"{len(csi)} CSI importés depuis DHIS2.", flush=True)
 
     # raise error if no source file and no DHIS2 credentials
     else:
@@ -418,7 +416,7 @@ def load_cs(
         n_geoms = sum(cs.geometry.is_valid)
         if n_geoms == 0:
             raise ValueError("Le fichier de CS ne contient aucune géométrie.")
-        print(f"CS: {n_geoms} géométries détectées.")
+        print(f"CS: {n_geoms} géométries détectées.", flush=True)
 
     # if not provided and DHIS2 credentials are set, extract from DHIS2
     elif dhis2_instance and dhis2_username and dhis2_password and dhis2_groups:
@@ -437,7 +435,7 @@ def load_cs(
             levels_included=[5],
             geom_types=["Point"],
         )
-        print(f"{len(cs)} CS importés depuis DHIS2.")
+        print(f"{len(cs)} CS importés depuis DHIS2.", flush=True)
 
     # raise error if no source file and no DHIS2 credentials
     else:
@@ -447,6 +445,216 @@ def load_cs(
         cs.crs = CRS.from_epsg(4326)
 
     return cs
+
+
+def load_population(
+    src_file: str,
+    lon_column: str,
+    lat_column: str,
+    pop_column: str,
+    country: str,
+    un_adj: bool,
+    constrained: bool,
+    dst_crs: CRS,
+    dst_dir: str = None,
+) -> str:
+    """Load population data.
+
+    Multiple data sources are possible :
+        * If a source raster is provided, use it
+        * If a source csv or excel file is provided, convert it
+          to a raster
+        * If no source file is provided, download Worldpop raster
+
+    Parameters
+    ----------
+    TODO
+
+    Return
+    ------
+    str
+        Path to population raster.
+    """
+    if src_file:
+
+        extension = os.path.basename(src_file).split(".")[-1].lower()
+
+        # population raster is provided by the user
+        if extension in (".tif", ".tiff"):
+            return src_file
+
+        # population excel file is provided by the user
+        elif extension in (".csv", ".xls", ".xlsx"):
+            population = population_from_excel(
+                fp=src_file,
+                lon_column=lon_column,
+                lat_column=lat_column,
+                pop_column=pop_column,
+            )
+            population = population.to_crs(CRS)
+            xmin, ymin, xmax, ymax = population.total_bounds
+            geom = Polygon(
+                [[xmin, ymin], [xmax, ymin], [xmax, ymax], [xmin, ymax], [xmin, ymin]]
+            )
+            raster = raster_from_excel(
+                dst_file=os.path.join(dst_dir, "population.tif"),
+                population=population,
+                geom=geom,
+                dst_crs=dst_crs,
+                xsize=100,
+                ysize=100,
+            )
+            return raster
+
+        # unrecognized file extension
+        else:
+            raise ValueError(f"L'extension du fichier {src_file} n'est pas supportée.")
+
+    # no file is provided by the user
+    # download population raster from Worldpop
+    print("La carte de population n'a pas été renseignée.", flush=True)
+    print("Télécharge les données WorldPop...", flush=True)
+    dst_dir = os.path.join(dst_dir, "worldpop")
+    os.makedirs(dst_dir, exist_ok=True)
+    population = download_worldpop(
+        country=country,
+        output_dir=dst_dir,
+        year=2020,
+        un_adj=un_adj,
+        constrained=constrained,
+        show_progress=False,
+        overwrite=False,
+    )
+
+    pass
+
+
+def population_from_excel(
+    fp: str, lon_column: str, lat_column: str, pop_column: str
+) -> gpd.GeoDataFrame:
+    """Load geodataframe from excel spreadsheet.
+
+    The user must provide info on which columns contains lat/lon values
+    and population counts.
+
+    Parameters
+    ----------
+    fp : str
+        Path to excel or CSV file.
+    lon_column : str
+        Column with decimal longitude.
+    lat_column : str
+        Column with decimal latitude.
+    pop_column : str
+        Column with population counts.
+
+    Return
+    ------
+    geodataframe
+        Output geodataframe with population count per location.
+    """
+    if fp.lower().endswith(".xls") or fp.lower().endswith(".xlsx"):
+        population = pd.read_excel(fp)
+    elif fp.lower().endswith(".csv"):
+        population = pd.read_csv(fp)
+    else:
+        raise ValueError(f"L'extension de {fp} n'est pas supportée.")
+    population["geometry"] = population.apply(
+        lambda row: Point(row[lon_column], row[lat_column]), axis=1
+    )
+    return gpd.GeoDataFrame(population[[pop_column, "geometry"]])
+
+
+def create_grid(
+    geom: Polygon, dst_crs: CRS, xsize: float, ysize: float
+) -> Tuple[rasterio.Affine, Tuple[int], Tuple[float]]:
+    """Create a raster grid for a given area of interest.
+
+    Parameters
+    ----------
+    geom : shapely geometry
+        Area of interest.
+    dst_crs : CRS
+        Target CRS as a rasterio CRS object.
+    xsize : float
+        x spatial resolution.
+    ysize : float
+        y spatial resolution.
+
+    Returns
+    -------
+    transform: Affine
+        Output affine transform object.
+    shape : tuple of int
+        Output shape (height, width).
+    bounds : tuple of float
+        Output bounds.
+    """
+    bounds = transform_bounds(CRS.from_epsg(4326), dst_crs, *geom.bounds)
+    xmin, ymin, xmax, ymax = bounds
+    transform = from_origin(xmin, ymax, xsize, ysize)
+    ncols = (xmax - xmin) / xsize
+    nrows = (ymax - ymin) / ysize
+    transform, ncols, nrows = aligned_target(transform, ncols, nrows, (xsize, ysize))
+    return transform, (nrows, ncols), bounds
+
+
+def raster_from_excel(
+    dst_file: str,
+    population: gpd.GeoDataFrame,
+    geom: Polygon,
+    dst_crs: CRS,
+    xsize: float,
+    ysize: float,
+) -> str:
+    """Create a population raster from a population count spreadhseet.
+
+    The values of population counts associated with a given place are
+    burned into the corresponding pixels. If multiple places are located
+    in the same pixel, population counts are summed.
+
+    Parameters
+    ----------
+    dst_file : str
+        Path to output geotiff raster.
+    population : geodataframe
+        Population counts.
+    geom : shapely polygon
+        Area of interest.
+    dst_crs : crs object
+        Target CRS.
+    xsize : float
+        Target spatial resolution in dst_crs units.
+    ysize : float
+        Target spatial resolution in dst_crs units.
+    """
+    dst_transform, dst_shape, dst_bounds = create_grid(
+        geom=geom, dst_crs=dst_crs, xsize=xsize, ysize=ysize
+    )
+    dst_array = rasterize(
+        shapes=[
+            (loc.geometry.__geo_interface__, loc["POPTOT"])
+            for _, loc in population.iterrows()
+        ],
+        out_shape=dst_shape,
+        transform=dst_transform,
+        all_touched=False,
+        merge_alg=rasterio.features.MergeAlg.add,
+        dtype="int32",
+    )
+    dst_profile = rasterio.profiles.default_gtiff_profile
+    dst_profile.update(
+        count=1,
+        compress="zstd",
+        dtype="int32",
+        transform=dst_transform,
+        height=dst_shape[0],
+        width=dst_shape[1],
+        nodata=-1,
+    )
+    with rasterio.open(dst_file, "w", **dst_profile) as dst:
+        dst.write(dst_array, 1)
+    return dst_file
 
 
 def _build_worldpop_url(country, year, un_adj=True, constrained=True):
@@ -1254,14 +1462,13 @@ def app():
         csi=args.csi,
         csi_groups=args.csi_groups,
         cs_groups=args.cs_groups,
-        population=None,
         output_dir=args.output_dir,
         min_population=args.min_population,
         min_distance_from_csi=args.min_distance_csi,
         max_distance_served=args.max_distance_served,
         country=args.country,
         epsg=args.epsg,
-        population=population,
+        population=args.population,
         population_lat=args.population_lat,
         population_lon=args.population_lon,
         un_adj=args.un_adj,
