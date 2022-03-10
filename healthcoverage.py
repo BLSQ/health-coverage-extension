@@ -196,8 +196,8 @@ def org_units_in_group(org_unit_groups: pd.DataFrame, group_uid: str) -> List[st
 
 
 def extract_org_units(
-    org_units: pd.DataFrame,
-    org_unit_groups: pd.DataFrame,
+    org_units_meta: pd.DataFrame,
+    org_unit_groups_meta: pd.DataFrame,
     groups_included: List[str] = None,
     groups_excluded: List[str] = None,
     levels_included: List[int] = None,
@@ -211,9 +211,9 @@ def extract_org_units(
 
     Parameters
     ----------
-    org_units : pd.DataFrame
+    org_units_meta : pd.DataFrame
         Org units metadata.
-    org_unit_groups : pd.DataFrame
+    org_unit_groups_meta : pd.DataFrame
         Org unit groups metadata.
     groups_included : list of str, optional
         List of included group UIDs.
@@ -229,26 +229,26 @@ def extract_org_units(
     geodataframe
         Extracted org units.
     """
-    ou_uids = list(org_units.index)
+    ou_uids = list(org_units_meta.index)
 
     if levels_included:
         ou_uids = [
-            uid for uid in ou_uids if org_units.at[uid, "level"] in levels_included
+            uid for uid in ou_uids if org_units_meta.at[uid, "level"] in levels_included
         ]
 
     if groups_included:
         included = []
         for group in groups_included:
-            included += org_units_in_group(org_unit_groups, group)
+            included += org_units_in_group(org_unit_groups_meta, group)
         ou_uids = [uid for uid in ou_uids if uid in included]
 
     if groups_excluded:
         excluded = []
         for group in groups_excluded:
-            excluded += org_units_in_group(org_unit_groups, group)
+            excluded += org_units_in_group(org_unit_groups_meta, group)
         ou_uids = [uid for uid in ou_uids if uid not in excluded]
 
-    org_units_ = org_units.loc[ou_uids]
+    org_units = org_units_meta.loc[ou_uids]
 
     # create new columns with full pyramid information
 
@@ -264,33 +264,33 @@ def extract_org_units(
         return org_units.at[uid, "name"]
 
     for lvl in range(1, 7):
-        org_units_[f"level_{lvl}_uid"] = org_units_.path.apply(
+        org_units[f"level_{lvl}_uid"] = org_units.path.apply(
             lambda path: _uid_from_path(path, lvl)
         )
 
     for lvl in range(1, 7):
-        org_units_[f"level_{lvl}_name"] = org_units_[f"level_{lvl}_uid"].apply(
-            lambda uid: _name_from_uid(org_units, uid)
+        org_units[f"level_{lvl}_name"] = org_units[f"level_{lvl}_uid"].apply(
+            lambda uid: _name_from_uid(org_units_meta, uid)
         )
 
     # to geodataframe
-    org_units_ = org_units_[~pd.isna(org_units_.geometry)]
-    org_units_["geom"] = org_units_.geometry.apply(shape)
-    org_units_ = gpd.GeoDataFrame(org_units_, crs=CRS.from_epsg(4326), geometry="geom")
+    org_units = org_units[~pd.isna(org_units.geometry)]
+    org_units["geom"] = org_units.geometry.apply(shape)
+    org_units = gpd.GeoDataFrame(org_units, crs=CRS.from_epsg(4326), geometry="geom")
 
     # drop irrelevant columns
-    columns = [col for col in org_units_.columns if col.startswith("level_")]
+    columns = [col for col in org_units.columns if col.startswith("level_")]
     columns.append("level")
     columns.append("geom")
-    org_units_ = org_units_[columns]
+    org_units = org_units[columns]
 
     # rename geometry column
-    org_units_.rename(columns={"geom": "geometry"}, inplace=True)
+    org_units.rename(columns={"geom": "geometry"}, inplace=True)
 
     # filter by geom type
-    org_units_ = org_units_[np.isin(org_units_.geom_type, geom_types)]
+    org_units = org_units[np.isin(org_units.geom_type, geom_types)]
 
-    return gpd.GeoDataFrame(org_units_.dropna(axis=1, how="all"))
+    return gpd.GeoDataFrame(org_units.dropna(axis=1, how="all"))
 
 
 def load_districts(
@@ -387,7 +387,7 @@ def load_csi(
             groups_meta,
             groups_included=included,
             groups_excluded=excluded,
-            levels_included=[5],
+            levels_included=[6],
             geom_types=["Point"],
         )
         print(f"{len(csi)} CSI importés depuis DHIS2.", flush=True)
@@ -432,7 +432,7 @@ def load_cs(
             groups_meta,
             groups_included=included,
             groups_excluded=excluded,
-            levels_included=[5],
+            levels_included=[6],
             geom_types=["Point"],
         )
         print(f"{len(cs)} CS importés depuis DHIS2.", flush=True)
