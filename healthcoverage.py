@@ -1,6 +1,5 @@
-import os
 import codecs
-import shutil
+import os
 import sys
 from typing import Sequence
 
@@ -19,18 +18,25 @@ from rasterstats import zonal_stats
 from shapely.geometry import Polygon, shape
 from tqdm import tqdm
 
-
-if sys.stdout.encoding != 'UTF-8':
-    sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')
-if sys.stderr.encoding != 'UTF-8':
-    sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer, 'strict')
+if sys.stdout.encoding != "UTF-8":
+    sys.stdout = codecs.getwriter("utf-8")(sys.stdout.buffer, "strict")
+if sys.stderr.encoding != "UTF-8":
+    sys.stderr = codecs.getwriter("utf-8")(sys.stderr.buffer, "strict")
 
 
 def coverage(
+    dhis2_instance: str,
+    dhis2_username: str,
+    dhis2_password: str,
     districts: str,
     csi: str,
+    csi_groups: str,
     cs: str,
+    cs_groups: str,
     population: str,
+    population_lat: str,
+    population_lon: str,
+    population_count: str,
     output_dir: str,
     min_population: int,
     min_distance_from_csi: int,
@@ -39,6 +45,7 @@ def coverage(
     epsg: int,
     un_adj: bool = True,
     constrained: bool = True,
+    overwrite: bool = False,
     show_progress: bool = False,
 ):
     """Génère les tables et cartes d'extension de la couverture sanitaire."""
@@ -252,7 +259,7 @@ def split_population_raster(
     districts: gpd.GeoDataFrame,
     output_dir: str,
     show_progress: bool = True,
-    overwrite: bool = False
+    overwrite: bool = False,
 ):
     """Split population raster per district.
 
@@ -324,7 +331,8 @@ def split_population_raster(
             dst_profile["width"] = population.shape[1]
             dst_profile["height"] = population.shape[0]
             dst_profile["dtype"] = "float32"
-            with rasterio.open(fp,
+            with rasterio.open(
+                fp,
                 "w",
                 **dst_profile,
             ) as dst:
@@ -444,7 +452,7 @@ def generate_population_served(
     epsg: int,
     area_served: int,
     show_progress: bool = True,
-    overwrite: bool = False
+    overwrite: bool = False,
 ) -> str:
     """Compute population served per pixel.
 
@@ -517,7 +525,7 @@ def generate_population_served(
 
     # Merge all population served tiles into a mosaic raster
     if not os.path.isfile(dst_file) or overwrite:
-        
+
         print("Assemble les tiles de population...", flush=True)
         tiles = [
             os.path.join(population_dir, f)
@@ -527,14 +535,16 @@ def generate_population_served(
 
         with rasterio.open(tiles[0]) as src:
             meta = src.meta.copy()
-        
+
         data, dst_transform = rasterio.merge.merge(tiles)
-        meta.update({
-            "driver": "GTiff",
-            "height": data.shape[1],
-            "width": data.shape[2],
-            "transform": dst_transform
-        })
+        meta.update(
+            {
+                "driver": "GTiff",
+                "height": data.shape[1],
+                "width": data.shape[2],
+                "transform": dst_transform,
+            }
+        )
 
         with rasterio.open(dst_file, "w", **meta) as dst:
             dst.write(data)
@@ -781,23 +791,23 @@ def analyse_cs(
     default_size=(800, 600),
     required_cols=1,
     optional_cols=1,
-    navigation="tabbed",
-    progress_regex=r"^progress: (\d+)%$"
+    tabbed_groups=True,
+    progress_regex=r"^progress: (\d+)%$",
 )
 def app():
 
     parser = GooeyParser(description="Module d'extension de la couverture santé")
     general = parser.add_argument_group("Général")
-    fosa = parser.add_argument_group("Formations sanitaires")
     dhis2 = parser.add_argument_group("DHIS2")
+    fosa = parser.add_argument_group("Formations sanitaires")
+    population = parser.add_argument_group("Population")
+    worldpop = parser.add_argument_group("Worldpop")
     modeling = parser.add_argument_group("Modélisation")
-    worldpop = parser.add_argument_group("WorldPop")
 
     fosa.add_argument(
         "--districts",
         metavar="Districts",
         help="Fichier des districts (Shapefile, Geopackage, ou GeoJSON)",
-        required=True,
         widget="FileChooser",
     )
 
@@ -805,24 +815,26 @@ def app():
         "--csi",
         metavar="Centres de santé",
         help="Fichier des centres de santé (Shapefile, Geopackage, ou GeoJSON)",
-        required=True,
         widget="FileChooser",
+    )
+    fosa.add_argument(
+        "--csi-groups",
+        metavar="Centres de santé (groupes DHIS2)",
+        help="Groupes DHIS2 à extraire",
+        default="iGLtZMdDGMD S6YdxQgX8SO",
     )
 
     fosa.add_argument(
         "--cs",
         metavar="Cases de santé",
         help="Fichier des cases de santé (Shapefile, Geopackage, ou GeoJSON)",
-        required=True,
         widget="FileChooser",
     )
-
-    general.add_argument(
-        "--output-dir",
-        metavar="Dossier de sortie",
-        help="Dossier où enregistrer les résultats",
-        required=True,
-        widget="DirChooser",
+    fosa.add_argument(
+        "--cs-groups",
+        metavar="Cases de santé (groupes DHIS2)",
+        help="Groupes DHIS2 à extraire",
+        default="EDbDMbIQtPD",
     )
 
     dhis2.add_argument(
@@ -864,9 +876,21 @@ def app():
         default=5000,
     )
 
-    general.add_argument("--country", metavar="Pays", help="Code pays", type=str, default="NER")
+    general.add_argument(
+        "--country", metavar="Pays", help="Code pays (ISO-A3)", type=str, default="NER"
+    )
 
-    general.add_argument("--epsg", metavar="EPSG", help="EPSG code", type=int, default=32632)
+    general.add_argument(
+        "--epsg", metavar="EPSG", help="EPSG code", type=int, default=32632
+    )
+
+    general.add_argument(
+        "--overwrite",
+        metavar="Overwrite",
+        action="store_true",
+        help="Forcer la réécriture des données existantes",
+        default=False,
+    )
 
     worldpop.add_argument(
         "--un-adj",
@@ -884,12 +908,42 @@ def app():
         default=False,
     )
 
+    population.add_argument(
+        "--population",
+        metavar="Données de population",
+        help="Carte de population (GeoTIFF, CSV ou Excel)",
+        widget="FileChooser",
+    )
+
+    population.add_argument(
+        "--population-lat",
+        metavar="Latitude",
+        help="Nom de la colonne (si CSV ou Excel)",
+        type=str,
+    )
+    population.add_argument(
+        "--population-lon",
+        metavar="Longitude",
+        help="Nom de la colonne (si CSV ou Excel)",
+        type=str,
+    )
+    population.add_argument(
+        "--population-count",
+        metavar="Dénombrement",
+        help="Nom de la colonne (si CSV ou Excel)",
+        type=str,
+    )
+
     args = parser.parse_args()
 
     coverage(
+        dhis2_instance=args.dhis2_instance,
+        dhis2_username=args.dhis2_username,
+        dhis2_password=args.dhis2_password,
         districts=args.districts,
         csi=args.csi,
-        cs=args.cs,
+        csi_groups=args.csi_groups,
+        cs_groups=args.cs_groups,
         population=None,
         output_dir=args.output_dir,
         min_population=args.min_population,
@@ -897,8 +951,12 @@ def app():
         max_distance_served=args.max_distance_served,
         country=args.country,
         epsg=args.epsg,
+        population=population,
+        population_lat=args.population_lat,
+        population_lon=args.population_lon,
         un_adj=args.un_adj,
         constrained=False if args.unconstrained else True,
+        overwrite=args.overwrite,
     )
 
 
