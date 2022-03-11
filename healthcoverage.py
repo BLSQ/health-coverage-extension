@@ -511,11 +511,11 @@ def load_population(
             )
             if not population.crs:
                 population.crs = CRS.from_epsg(4326)
-            population = population.to_crs(dst_crs)
             xmin, ymin, xmax, ymax = population.total_bounds
             geom = Polygon(
                 [[xmin, ymin], [xmax, ymin], [xmax, ymax], [xmin, ymax], [xmin, ymin]]
             )
+            population = population.to_crs(dst_crs)
             raster = raster_from_excel(
                 dst_file=os.path.join(dst_dir, "population.tif"),
                 population=population,
