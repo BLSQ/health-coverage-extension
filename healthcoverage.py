@@ -509,6 +509,8 @@ def load_population(
                 lat_column=lat_column,
                 pop_column=pop_column,
             )
+            if not population.crs:
+                population.crs = CRS.from_epsg(4326)
             population = population.to_crs(CRS)
             xmin, ymin, xmax, ymax = population.total_bounds
             geom = Polygon(
