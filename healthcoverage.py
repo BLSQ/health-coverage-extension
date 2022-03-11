@@ -38,6 +38,7 @@ def coverage(
     csi_groups: str,
     cs: str,
     cs_groups: str,
+    write_org_units: bool,
     population: str,
     population_lat: str,
     population_lon: str,
@@ -76,6 +77,11 @@ def coverage(
         dhis2_password=dhis2_password,
         dhis2_groups=cs_groups,
     )
+
+    if write_org_units:
+        districts.to_file(os.path.join(output_dir, "districts.gpkg"))
+        csi.to_file(os.path.join(output_dir, "centres_de_sante.gpkg"))
+        cs.to_file(os.path.join(output_dir, "cases_de_sante.gpkg"))
 
     population = load_population(
         src_file=population,
@@ -1367,6 +1373,14 @@ def app():
         default="EDbDMbIQtPD",
     )
 
+    fosa.add_argument(
+        "--write-org-units",
+        metavar="Garder une copie des FOSAs",
+        help="Enregistre une copie des FOSAs dans le dossier de sortie",
+        action="store_true",
+        default=False,
+    )
+
     dhis2.add_argument(
         "--dhis2-instance", metavar="Instance DHIS2", help="URL de l'instance DHIS2"
     )
@@ -1483,6 +1497,7 @@ def app():
         csi_groups=args.csi_groups,
         cs=args.cs,
         cs_groups=args.cs_groups,
+        write_org_units=args.write_org_units,
         output_dir=args.output_dir,
         min_population=args.min_population,
         min_distance_from_csi=args.min_distance_csi,
