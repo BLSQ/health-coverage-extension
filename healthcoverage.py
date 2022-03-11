@@ -1,5 +1,6 @@
 import codecs
 import os
+import shutil
 import sys
 from typing import List, Sequence, Tuple
 
@@ -88,12 +89,23 @@ def coverage(
         dst_dir=os.path.join(output_dir, "population"),
     )
 
-    print("Génère les tiles de population pour chaque district...", flush=True)
-    dst_dir = os.path.join(output_dir, "population_tiles")
-    os.makedirs(dst_dir, exist_ok=True)
-    split_population_raster(
-        population, districts, output_dir=dst_dir, show_progress=show_progress
-    )
+    # remove old directory with population tiles if overwrite = True
+    dst_dir = os.path.join(output_dir, "population", "tiles")
+    if os.path.isdir(dst_dir) and overwrite:
+        shutil.rmtree(dst_dir)
+
+    # re-use existing tiles if directory is not empty and overwrite = False
+    if os.path.isdir(dst_dir) and not overwrite:
+        if os.listdir(dst_dir) > 0:
+            print("Ré-utilise les données de population existantes.", flush=True)
+
+    # generate district tiles if no existing directory is found
+    if not os.path.isdir(dst_dir):
+        print("Génère les tiles de population pour chaque district...", flush=True)
+        os.makedirs(dst_dir, exist_ok=True)
+        split_population_raster(
+            population, districts, output_dir=dst_dir, show_progress=show_progress
+        )
 
     print("Calcule la population desservie...", flush=True)
     dst_file = os.path.join(dst_dir, "population_served.tif")
