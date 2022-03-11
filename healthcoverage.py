@@ -671,6 +671,7 @@ def raster_from_excel(
         height=dst_shape[0],
         width=dst_shape[1],
         nodata=-1,
+        crs=dst_crs,
     )
     os.makedirs(os.path.dirname(dst_file), exist_ok=True)
     with rasterio.open(dst_file, "w", **dst_profile) as dst:
