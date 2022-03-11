@@ -104,6 +104,9 @@ def coverage(
     if os.path.isdir(dst_dir) and not overwrite:
         if len(os.listdir(dst_dir)) > 0:
             print("Ré-utilise les données de population existantes.", flush=True)
+        else:
+            # remove empty dir
+            shutil.rmtree(dst_dir)
 
     # generate district tiles if no existing directory is found
     if not os.path.isdir(dst_dir):
