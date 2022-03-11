@@ -492,11 +492,11 @@ def load_population(
         extension = os.path.basename(src_file).split(".")[-1].lower()
 
         # population raster is provided by the user
-        if extension in (".tif", ".tiff"):
+        if extension in ("tif", "tiff"):
             return src_file
 
         # population excel file is provided by the user
-        elif extension in (".csv", ".xls", ".xlsx"):
+        elif extension in ("csv", "xls", "xlsx"):
             population = population_from_excel(
                 fp=src_file,
                 lon_column=lon_column,
