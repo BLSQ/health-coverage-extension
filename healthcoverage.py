@@ -117,7 +117,7 @@ def coverage(
         )
 
     print("Calcule la population desservie...", flush=True)
-    dst_file = os.path.join(dst_dir, "intermediary", "population_served.tif")
+    dst_file = os.path.join(output_dir, "intermediary", "population_served.tif")
     os.makedirs(os.path.dirname(dst_file), exist_ok=True)
     served = generate_population_served(
         districts,
@@ -1040,6 +1040,10 @@ def generate_population_served(
     """
     if show_progress:
         pbar = tqdm(total=len(districts))
+
+    dst_crs = CRS.from_epsg(epsg)
+    if districts.crs != dst_crs:
+        districts.to_crs(dst_crs, inplace=True)
 
     # Compute population served for each population raster tile,
     # i.e. once per district
