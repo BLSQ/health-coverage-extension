@@ -531,6 +531,7 @@ def load_population(
                 dst_crs=dst_crs,
                 xsize=100,
                 ysize=100,
+                pop_count_column=pop_column
             )
             return raster
 
@@ -634,6 +635,7 @@ def raster_from_excel(
     dst_crs: CRS,
     xsize: float,
     ysize: float,
+    pop_count_column: str
 ) -> str:
     """Create a population raster from a population count spreadhseet.
 
@@ -655,13 +657,16 @@ def raster_from_excel(
         Target spatial resolution in dst_crs units.
     ysize : float
         Target spatial resolution in dst_crs units.
+    pop_count_column : str
+        Name of the column in population dataframe with
+        population count.
     """
     dst_transform, dst_shape, dst_bounds = create_grid(
         geom=geom, dst_crs=dst_crs, xsize=xsize, ysize=ysize
     )
     dst_array = rasterize(
         shapes=[
-            (loc.geometry.__geo_interface__, loc["POPTOT"])
+            (loc.geometry.__geo_interface__, loc[pop_count_column])
             for _, loc in population.iterrows()
         ],
         out_shape=dst_shape,
