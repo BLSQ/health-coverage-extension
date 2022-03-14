@@ -151,9 +151,10 @@ def coverage(
 
     print("Analyse les zones potentielles d'extension...", flush=True)
     potential_areas = analyse_potential_areas(priority_areas, csi, epsg, min_population)
-    potential_areas.to_file(
-        os.path.join(output_dir, "extension_areas.gpkg"), driver="GPKG"
-    )
+    if not potential_areas.empty:
+        potential_areas.to_file(
+            os.path.join(output_dir, "extension_areas.gpkg"), driver="GPKG"
+        )
 
     print("Analyse le potentiel d'extension des CS...", flush=True)
     potential_cs = analyse_cs(cs, csi, epsg)
@@ -1286,7 +1287,7 @@ def analyse_potential_areas(
     potential_areas["area"] = round(
         potential_areas.to_crs(f"EPSG:{epsg}").area * 1e-6, 2
     )
-    potential_areas = potential_areas[potential_areas["area"] >= 10]
+    potential_areas = potential_areas[potential_areas["area"] >= 1]
 
     # Get maximum population served in polygon
     stats = zonal_stats(
