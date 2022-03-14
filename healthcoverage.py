@@ -117,7 +117,8 @@ def coverage(
         )
 
     print("Calcule la population desservie...", flush=True)
-    dst_file = os.path.join(dst_dir, "population_served.tif")
+    dst_file = os.path.join(dst_dir, "intermediary", "population_served.tif")
+    os.makedirs(os.path.dirname(dst_file), exist_ok=True)
     served = generate_population_served(
         districts,
         population_dir=dst_dir,
@@ -128,7 +129,8 @@ def coverage(
     )
 
     print("Génère les zones d'extension potentielles...", flush=True)
-    dst_file = os.path.join(output_dir, "priority_areas.tif")
+    dst_file = os.path.join(output_dir, "intermediary", "priority_areas.tif")
+    os.makedirs(os.path.dirname(dst_file), exist_ok=True)
     priority_areas = generate_priority_areas(
         population_served=served,
         csi=csi,
@@ -141,21 +143,23 @@ def coverage(
     print("Calcule la population desservie par chaque CSI...", flush=True)
     column = f"population_{int(max_distance_served / 1000)}km"
     csi[column] = population_served_per_fosa(csi, served)
-    csi.to_file(os.path.join(output_dir, "csi_population.gpkg"), driver="GPKG")
+    csi.to_file(os.path.join(output_dir, "csi_population_served.gpkg"), driver="GPKG")
 
     print("Calcule la population desservie par chaque CS...", flush=True)
     cs[column] = population_served_per_fosa(cs, served)
-    cs.to_file(os.path.join(output_dir, "cs_population.gpkg"), driver="GPKG")
+    cs.to_file(os.path.join(output_dir, "cs_population_served.gpkg"), driver="GPKG")
 
     print("Analyse les zones potentielles d'extension...", flush=True)
     potential_areas = analyse_potential_areas(priority_areas, csi, epsg, min_population)
     potential_areas.to_file(
-        os.path.join(output_dir, "potential_areas.gpkg"), driver="GPKG"
+        os.path.join(output_dir, "extension_areas.gpkg"), driver="GPKG"
     )
 
     print("Analyse le potentiel d'extension des CS...", flush=True)
     potential_cs = analyse_cs(cs, csi, epsg)
-    potential_cs.to_file(os.path.join(output_dir, "potential_cs.gpkg"), driver="GPKG")
+    potential_cs.to_file(
+        os.path.join(output_dir, "cs_extension_potential.gpkg"), driver="GPKG"
+    )
 
     # shutil.rmtree(os.path.join(output_dir, "population_tiles"))
     # shutil.rmtree(os.path.join(output_dir, "worldpop"))
