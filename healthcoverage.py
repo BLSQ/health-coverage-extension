@@ -98,6 +98,7 @@ def coverage(
         constrained=constrained,
         dst_crs=CRS.from_epsg(epsg),
         dst_dir=os.path.join(output_dir, "population"),
+        overwrite=overwrite
     )
 
     # remove old directory with population tiles if overwrite = True
@@ -490,6 +491,7 @@ def load_population(
     constrained: bool,
     dst_crs: CRS,
     dst_dir: str = None,
+    overwrite: bool = False,
 ) -> str:
     """Load population data.
 
@@ -559,7 +561,7 @@ def load_population(
         un_adj=un_adj,
         constrained=constrained,
         show_progress=False,
-        overwrite=False,
+        overwrite=overwrite,
     )
 
     return population
@@ -784,13 +786,16 @@ def download_worldpop(
     if os.path.isfile(fp) and not overwrite:
         print("Données de population déjà téléchargées.", flush=True)
         return fp
+    if os.path.isfile(fp) and overwrite:
+        os.remove(fp)
 
     print(f"Téléchargement des données de population depuis {url}.", flush=True)
     with requests.get(url, stream=True, timeout=120) as r:
         r.raise_for_status()
 
+        size = int(r.headers.get("Content-Length"))
+
         if show_progress:
-            size = int(r.headers.get("Content-Length"))
             bar_format = "{desc} | {percentage:3.0f}% | {rate_fmt}"
             pbar = tqdm(
                 desc=os.path.basename(fp),
@@ -809,6 +814,10 @@ def download_worldpop(
 
         if show_progress:
             pbar.close()
+
+    if os.path.getsize(fp) != size:
+        os.remove(fp)
+        raise ConnectionError("Worldpop download failed and/or is corrupt.")
 
     print(f"Données de population téléchargées dans {output_dir}.", flush=True)
     return fp
