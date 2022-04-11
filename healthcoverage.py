@@ -98,7 +98,7 @@ def coverage(
         constrained=constrained,
         dst_crs=CRS.from_epsg(epsg),
         dst_dir=os.path.join(output_dir, "population"),
-        overwrite=overwrite
+        overwrite=overwrite,
     )
 
     # remove old directory with population tiles if overwrite = True
@@ -326,7 +326,11 @@ def extract_org_units(
 
 
 def load_districts(
-    src_file: str, dhis2_instance: str, dhis2_username: str, dhis2_password: str, districts_lvl: int
+    src_file: str,
+    dhis2_instance: str,
+    dhis2_username: str,
+    dhis2_password: str,
+    districts_lvl: int,
 ) -> gpd.GeoDataFrame:
     """Load districts geometries from source file or DHIS2."""
     # From source file
@@ -395,7 +399,7 @@ def load_csi(
     dhis2_username: str,
     dhis2_password: str,
     dhis2_groups: str,
-    fosa_lvl: int
+    fosa_lvl: int,
 ) -> gpd.GeoDataFrame:
     """Load CSI geometries from source file or DHIS2."""
     # from source file
@@ -441,7 +445,7 @@ def load_cs(
     dhis2_username: str,
     dhis2_password: str,
     dhis2_groups: str,
-    fosa_lvl: int
+    fosa_lvl: int,
 ) -> gpd.GeoDataFrame:
     """Load cases de santé geometries from source file or DHIS2."""
     # from source file
@@ -540,7 +544,7 @@ def load_population(
                 dst_crs=dst_crs,
                 xsize=100,
                 ysize=100,
-                pop_count_column=pop_column
+                pop_count_column=pop_column,
             )
             return raster
 
@@ -644,7 +648,7 @@ def raster_from_excel(
     dst_crs: CRS,
     xsize: float,
     ysize: float,
-    pop_count_column: str
+    pop_count_column: str,
 ) -> str:
     """Create a population raster from a population count spreadhseet.
 
@@ -1063,9 +1067,12 @@ def generate_population_served(
     if show_progress:
         pbar = tqdm(total=len(districts))
 
-    dst_crs = CRS.from_epsg(epsg)
-    if districts.crs != dst_crs:
-        districts.to_crs(dst_crs, inplace=True)
+    # get coordinate reference system of population raster and reproject
+    # districts geometries if needed
+    with rasterio.open(os.path.join(population_dir, "0.tif")) as src:
+        population_crs = src.crs
+    if districts.crs != population_crs:
+        districts.to_crs(population_crs, inplace=True)
 
     # Compute population served for each population raster tile,
     # i.e. once per district
@@ -1389,7 +1396,7 @@ def app():
         metavar="Niveau hiérarchique des districts",
         help="Niveau des unités d'organisation dans DHIS2 (districts)",
         type=int,
-        default=3
+        default=3,
     )
 
     fosa.add_argument(
@@ -1397,7 +1404,7 @@ def app():
         metavar="Niveau hiérarchique des FOSAs",
         help="Niveau des unités d'organisation dans DHIS2 (formations sanitaires)",
         type=int,
-        default=5
+        default=5,
     )
 
     fosa.add_argument(
