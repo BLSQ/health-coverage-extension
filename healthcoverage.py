@@ -39,7 +39,6 @@ def coverage(
     csi_groups: str,
     cs: str,
     cs_groups: str,
-    fosa_lvl: int,
     write_org_units: bool,
     population: str,
     population_lat: str,
@@ -71,7 +70,6 @@ def coverage(
         dhis2_username=dhis2_username,
         dhis2_password=dhis2_password,
         dhis2_groups=csi_groups,
-        fosa_lvl=fosa_lvl,
     )
 
     cs = load_cs(
@@ -80,7 +78,6 @@ def coverage(
         dhis2_username=dhis2_username,
         dhis2_password=dhis2_password,
         dhis2_groups=cs_groups,
-        fosa_lvl=fosa_lvl,
     )
 
     if write_org_units:
@@ -399,7 +396,6 @@ def load_csi(
     dhis2_username: str,
     dhis2_password: str,
     dhis2_groups: str,
-    fosa_lvl: int,
 ) -> gpd.GeoDataFrame:
     """Load CSI geometries from source file or DHIS2."""
     # from source file
@@ -424,7 +420,7 @@ def load_csi(
             groups_meta,
             groups_included=included,
             groups_excluded=excluded,
-            levels_included=[fosa_lvl],
+            levels_included=None,
             geom_types=["Point"],
         )
         print(f"{len(csi)} CSI importés depuis DHIS2.", flush=True)
@@ -445,7 +441,6 @@ def load_cs(
     dhis2_username: str,
     dhis2_password: str,
     dhis2_groups: str,
-    fosa_lvl: int,
 ) -> gpd.GeoDataFrame:
     """Load cases de santé geometries from source file or DHIS2."""
     # from source file
@@ -470,7 +465,7 @@ def load_cs(
             groups_meta,
             groups_included=included,
             groups_excluded=excluded,
-            levels_included=[fosa_lvl],
+            levels_included=None,
             geom_types=["Point"],
         )
         print(f"{len(cs)} CS importés depuis DHIS2.", flush=True)
@@ -1400,14 +1395,6 @@ def app():
     )
 
     fosa.add_argument(
-        "--fosa-lvl",
-        metavar="Niveau hiérarchique des FOSAs",
-        help="Niveau des unités d'organisation dans DHIS2 (formations sanitaires)",
-        type=int,
-        default=5,
-    )
-
-    fosa.add_argument(
         "--csi",
         metavar="Centres de santé",
         help="Fichier des centres de santé (Shapefile, Geopackage, ou GeoJSON)",
@@ -1558,7 +1545,6 @@ def app():
         csi_groups=args.csi_groups,
         cs=args.cs,
         cs_groups=args.cs_groups,
-        fosa_lvl=args.fosa_lvl,
         write_org_units=args.write_org_units,
         output_dir=args.output_dir,
         min_population=args.min_population,
