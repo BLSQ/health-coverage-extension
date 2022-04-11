@@ -34,14 +34,14 @@ Les centres de santé sont les formations sanitaires correspondant à l'offre ac
 C'est pourquoi cette catégorie de formations sanitaires peut inclure les hôpitaux en plus des centres de santé.
 
 Le fichier (GeoPackage, Shapefile ou GeoJSON) peut être fourni par l'utilisateur ou téléchargé automatiquement depuis une instance DHIS2 si les crédentiels sont fournis par l'utilisateur.
-Dans ce cas, l'utilisateur doit aussi spécifier le niveau hiérarchique correspondant à l'unité d'organisation concernée ainsi que les groupes DHIS2 à inclure et/ou à exclure.
+Dans ce cas, l'utilisateur doit spécifier les groupes DHIS2 à inclure et/ou à exclure.
 
 ### Cases de santé
 
 Les cases de santé sont les formations sanitaires candidates à une conversion en CSI.
 
 Le fichier (GeoPackage, Shapefile ou GeoJSON) peut être fourni par l'utilisateur ou téléchargé automatiquement depuis une instance DHIS2 si les crédentiels sont fournis par l'utilisateur.
-Dans ce cas, l'utilisateur doit aussi spécifier le niveau hiérarchique correspondant à l'unité d'organisation concernée ainsi que les groupes DHIS2 à inclure et/ou à exclure.
+Dans ce cas, l'utilisateur doit spécifier les groupes DHIS2 à inclure et/ou à exclure.
 
 ## Données de sortie
 
@@ -82,7 +82,6 @@ Par défaut, le programme importe les formations sanitaires depuis DHIS2 si les 
 
 * Districts (optionnel) : fichier de districts (Shapefile, GeoPackage, GeoJSON), ne pas remplir pour importer depuis DHIS2
 * Niveau hiérarchique des districts (optionnel) : niveau hiérarchique de l'unité d'organisation correspondant aux districts dans DHIS2 (default = 3)
-* Niveau hiérarchique des FOSAs (optionnel) : niveau hiérarchique de l'unité d'organisation correspondant aux centres et cases de santé dans DHIS2 (default = 5)
 * Centres de santé (optionnel) : fichier de centres de santé (Shapefile, GeoPackage, GeoJSON), ne pas remplir pour importer depuis DHIS2
 * Centres de santé (groupes DHIS2) (optionnel) : identifiants des groupes DHIS2 à extraire, séparés par des espaces. Pour exclure un groupe, préfixer l'identifiant du groupe par le signe `-`.
 * Cases de santé (optionnel) : fichier de cases de santé (Shapefile, GeoPackage, GeoJSON), ne pas remplir pour importer depuis DHIS2
