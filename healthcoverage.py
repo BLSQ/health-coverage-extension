@@ -327,7 +327,7 @@ def load_districts(
     dhis2_instance: str,
     dhis2_username: str,
     dhis2_password: str,
-    districts_lvl: int,
+    dhis2_groups: str,
 ) -> gpd.GeoDataFrame:
     """Load districts geometries from source file or DHIS2."""
     # From source file
@@ -346,10 +346,13 @@ def load_districts(
             server=dhis2_instance,
             timeout=60,
         )
+        included, excluded = _parse_dhis2_groups(dhis2_groups)
         districts = extract_org_units(
             org_units_meta,
             groups_meta,
-            levels_included=[districts_lvl],
+            included=included,
+            excluded=excluded,
+            lvels_included=None,
             geom_types=["Polygon", "MultiPolygon"],
         )
         print(f"{len(districts)} districts importés depuis DHIS2.", flush=True)
