@@ -1388,7 +1388,8 @@ def app():
 
     fosa.add_argument(
         "--districts-groups",
-        metavar="Groupes DHIS2 à extraire",
+        metavar="Districts (groupes DHIS2)",
+        help="Groupes DHIS2 à extraire",
         default="CJIuQ1Lp3wG"
     )
 
