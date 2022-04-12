@@ -1067,7 +1067,8 @@ def generate_population_served(
 
     # get coordinate reference system of population raster and reproject
     # districts geometries if needed
-    with rasterio.open(os.path.join(population_dir, "0.tif")) as src:
+    random_tile = [os.path.join(population_dir, f) for f in os.listdir(population_dir) if f.endswith(".tif")][0]
+    with rasterio.open(random_tile) as src:
         population_crs = src.crs
     if districts.crs != population_crs:
         districts.to_crs(population_crs, inplace=True)
