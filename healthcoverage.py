@@ -350,9 +350,9 @@ def load_districts(
         districts = extract_org_units(
             org_units_meta,
             groups_meta,
-            included=included,
-            excluded=excluded,
-            lvels_included=None,
+            groups_included=included,
+            groups_excluded=excluded,
+            levels_included=None,
             geom_types=["Polygon", "MultiPolygon"],
         )
         print(f"{len(districts)} districts importés depuis DHIS2.", flush=True)
