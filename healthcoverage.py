@@ -34,7 +34,7 @@ def coverage(
     dhis2_username: str,
     dhis2_password: str,
     districts: str,
-    districts_lvl: int,
+    districts_groups: str,
     csi: str,
     csi_groups: str,
     cs: str,
@@ -61,7 +61,7 @@ def coverage(
         dhis2_instance=dhis2_instance,
         dhis2_username=dhis2_username,
         dhis2_password=dhis2_password,
-        districts_lvl=districts_lvl,
+        dhis2_groups=districts_groups,
     )
 
     csi = load_csi(
@@ -1387,11 +1387,9 @@ def app():
     )
 
     fosa.add_argument(
-        "--districts-lvl",
-        metavar="Niveau hiérarchique des districts",
-        help="Niveau des unités d'organisation dans DHIS2 (districts)",
-        type=int,
-        default=3,
+        "--districts-groups",
+        metavar="Groupes DHIS2 à extraire",
+        default="CJIuQ1Lp3wG"
     )
 
     fosa.add_argument(
@@ -1429,7 +1427,7 @@ def app():
     )
 
     dhis2.add_argument(
-        "--dhis2-instance", metavar="Instance DHIS2", help="URL de l'instance DHIS2"
+        "--dhis2-instance", metavar="Instance DHIS2", help="URL de l'instance DHIS2", default="http://dhis2.snisniger.ne"
     )
 
     dhis2.add_argument(
@@ -1540,7 +1538,7 @@ def app():
         dhis2_username=args.dhis2_username,
         dhis2_password=args.dhis2_password,
         districts=args.districts,
-        districts_lvl=args.districts_lvl,
+        districts_groups=args.districts_groups,
         csi=args.csi,
         csi_groups=args.csi_groups,
         cs=args.cs,

@@ -81,11 +81,11 @@ Cette catégorie de paramètres permet à l'utilisateur de fournir les fichiers 
 Par défaut, le programme importe les formations sanitaires depuis DHIS2 si les crédentiels sont fournis par l'utilisateur.
 
 * Districts (optionnel) : fichier de districts (Shapefile, GeoPackage, GeoJSON), ne pas remplir pour importer depuis DHIS2
-* Niveau hiérarchique des districts (optionnel) : niveau hiérarchique de l'unité d'organisation correspondant aux districts dans DHIS2 (default = 3)
-* Centres de santé (optionnel) : fichier de centres de santé (Shapefile, GeoPackage, GeoJSON), ne pas remplir pour importer depuis DHIS2
-* Centres de santé (groupes DHIS2) (optionnel) : identifiants des groupes DHIS2 à extraire, séparés par des espaces. Pour exclure un groupe, préfixer l'identifiant du groupe par le signe `-`.
+* Districts (groupes DHIS2) (optionnel) : identifiants des groups DHIS2 à extraire, séparés par des espaces. Pour exclure un groupe, préfixer l'identifiant du groupe par le signe `-`. Seuls les polygones sont extraits.
+* Centres de santé (optionnel) : fichier de centres de santé (Shapefile, GeoPackage, GeoJSON), ne pas remplir pour importer depuis DHIS2.
+* Centres de santé (groupes DHIS2) (optionnel) : identifiants des groupes DHIS2 à extraire, séparés par des espaces. Pour exclure un groupe, préfixer l'identifiant du groupe par le signe `-`. Seuls les points sont extraits.
 * Cases de santé (optionnel) : fichier de cases de santé (Shapefile, GeoPackage, GeoJSON), ne pas remplir pour importer depuis DHIS2
-* Cases de santé (groupes DHIS2) (optionnel) : identifiants des groupes DHIS2 à extraire, séparés par des espaces. Pour exclure un groupe, préfixer l'identifiant du groupe par le signe `-`.
+* Cases de santé (groupes DHIS2) (optionnel) : identifiants des groupes DHIS2 à extraire, séparés par des espaces. Pour exclure un groupe, préfixer l'identifiant du groupe par le signe `-`. Seuls les points sont extraits.
 * Garder une copie des FOSAs (optionnel) : sauvegarde les districts et FOSAs importés depuis DHIS2 dans le dossier de sortie.
 
 ### Population
