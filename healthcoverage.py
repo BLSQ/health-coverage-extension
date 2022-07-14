@@ -1067,7 +1067,11 @@ def generate_population_served(
 
     # get coordinate reference system of population raster and reproject
     # districts geometries if needed
-    random_tile = [os.path.join(population_dir, f) for f in os.listdir(population_dir) if f.endswith(".tif")][0]
+    random_tile = [
+        os.path.join(population_dir, f)
+        for f in os.listdir(population_dir)
+        if f.endswith(".tif")
+    ][0]
     with rasterio.open(random_tile) as src:
         population_crs = src.crs
     if districts.crs != population_crs:
@@ -1393,8 +1397,8 @@ def app():
     fosa.add_argument(
         "--districts-groups",
         metavar="Districts (groupes DHIS2)",
-        help="Groupes DHIS2 à extraire",
-        default="CJIuQ1Lp3wG"
+        help="Identifiant DHIS2 du groupe d'unités d'organisation à extraire",
+        default="CJIuQ1Lp3wG",
     )
 
     fosa.add_argument(
@@ -1406,7 +1410,7 @@ def app():
     fosa.add_argument(
         "--csi-groups",
         metavar="Centres de santé (groupes DHIS2)",
-        help="Groupes DHIS2 à extraire",
+        help="Identifiants DHIS2 des groupes d'unités d'organisation à extraire",
         default="iGLtZMdDGMD S6YdxQgX8SO",
     )
 
@@ -1419,7 +1423,7 @@ def app():
     fosa.add_argument(
         "--cs-groups",
         metavar="Cases de santé (groupes DHIS2)",
-        help="Groupes DHIS2 à extraire",
+        help="Identifiants DHIS2 des groupes d'unités d'organisation à extraire",
         default="EDbDMbIQtPD",
     )
 
@@ -1432,7 +1436,10 @@ def app():
     )
 
     dhis2.add_argument(
-        "--dhis2-instance", metavar="Instance DHIS2", help="URL de l'instance DHIS2", default="http://dhis2.snisniger.ne"
+        "--dhis2-instance",
+        metavar="Instance DHIS2",
+        help="URL de l'instance DHIS2",
+        default="http://dhis2.snisniger.ne",
     )
 
     dhis2.add_argument(
@@ -1483,7 +1490,11 @@ def app():
     )
 
     general.add_argument(
-        "--epsg", metavar="EPSG", help="EPSG code", type=int, default=32632
+        "--epsg",
+        metavar="Système de projection",
+        help="Système de projection à utiliser pour la modélisation (EPSG code)",
+        type=int,
+        default=32632,
     )
 
     general.add_argument(
