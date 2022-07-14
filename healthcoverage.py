@@ -1380,12 +1380,65 @@ def analyse_cs(
 def app():
 
     parser = GooeyParser(description="Module d'extension de la couverture santé")
-    general = parser.add_argument_group("Général")
-    dhis2 = parser.add_argument_group("DHIS2")
-    fosa = parser.add_argument_group("Formations sanitaires")
-    population = parser.add_argument_group("Population")
-    worldpop = parser.add_argument_group("Worldpop")
-    modeling = parser.add_argument_group("Modélisation")
+    general = parser.add_argument_group(
+        "Général",
+        (
+            "Configurer les paramètres généraux du module d'extension de la "
+            "couverture santé.\n\nCes paramètres determinent l'étendue spatiale "
+            "de l'analyse (le pays) et le dossier où seront enregistrés "
+            "les fichiers de sortie."
+        ),
+    )
+    dhis2 = parser.add_argument_group(
+        "DHIS2",
+        (
+            "Ces paramètres permettent de connecter le module à une instance DHIS2 "
+            "afin de télécharger automatiquement les géométries des districts "
+            "et la localisation des formations sanitaires.\n\n"
+            "Il n'est pas nécessaire de remplir ces champs si les fichiers de districts "
+            "et de formations sanitaires sont chargés manuellement par l'utilisateur."
+        ),
+    )
+    fosa = parser.add_argument_group(
+        "Formations sanitaires",
+        (
+            "Identifier les données d'entrée pour les districts et les deux catégories "
+            "de formations sanitaires (e.g. centre de santé et case de santé).\n\n"
+            "Les données d'entrées peuvent provenir d'un fichier fourni par l'utilisateur "
+            "ou directement téléchargées depuis l'instance DHIS2. "
+            "Les unités d'organisation à extraire du DHIS2 sont identifiées "
+            "par l'identifiant de leur groupe DHIS2. "
+            "Plusieurs groupes peuvent être inclus en les séparant par des espaces."
+        ),
+    )
+    population = parser.add_argument_group(
+        "Population",
+        (
+            "Charger les données de population dans le module de couverture santé. "
+            "Ignorer l'onglet pour utiliser les données WorldPop. \n\n"
+            "Le fichier de population peut être au format raster (GeoTIFF) ou tabulaire (CSV, Excel). "
+            "Dans le cas d'un fichier tabulaire, les noms de colonnes avec les données de latitude "
+            " et de longitude doivent êtres renseignés par l'utilisateur, tout comme la colonne "
+            "contenant les données de dénombrement de la population."
+        ),
+    )
+    worldpop = parser.add_argument_group(
+        "Worldpop",
+        (
+            "Identifier les données de population WorldPop à télécharger. \n\n"
+            "La différence entre les différentes cartes disponibles est expliquée "
+            "sur le site officiel de WorldPop (https://hub.worldpop.org/project/categories?id=3)."
+        ),
+    )
+    modeling = parser.add_argument_group(
+        "Modélisation",
+        (
+            "Ajuster les paramètres de modélisation du module.\n\n"
+            "Ces paramètres permettent de modifier les paramètres utilisés "
+            "par le modèle pour calculer les populations desservies et identifier "
+            "les formations sanitaires à améliorer."
+        ),
+    )
 
     fosa.add_argument(
         "--districts",
