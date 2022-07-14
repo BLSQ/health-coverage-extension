@@ -1510,7 +1510,7 @@ def app():
         "--min-distance-csi",
         metavar="Distance minimum",
         type=int,
-        help="Distance minimum entre un nouveau CSI et un CSI existant (en mètres)",
+        help="Distance (en mètres) minimum à un CSI existant pour considérer une nouvelle implantation ou une reconversion.",
         default=15000,
     )
 
@@ -1518,7 +1518,7 @@ def app():
         "--max-distance-served",
         metavar="Distance desservie",
         type=int,
-        help="Rayon autour d'un CSI autour duquel la population est desservie (en mètres)",
+        help="Rayon (en mètres) autour d'un CSI autour duquel la population est considérée comme étant desservie.",
         default=5000,
     )
 
@@ -1526,7 +1526,7 @@ def app():
         "--min-population",
         metavar="Population desservie minimum",
         type=int,
-        help="Population desservie minimum pour qu'une CS soit considérée pour conversion vers un CSI",
+        help="Population desservie minimum pour qu'une CS soit considérée pour reconversion en CSI.",
         default=5000,
     )
 
