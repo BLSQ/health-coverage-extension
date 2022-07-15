@@ -81,10 +81,17 @@ def coverage(
         dhis2_groups=cs_groups,
     )
 
+    os.makedirs(os.path.join(output_dir, "organisation_units"), exist_ok=True)
     if write_org_units:
-        districts.to_file(os.path.join(output_dir, "src_districts.gpkg"))
-        csi.to_file(os.path.join(output_dir, "src_centres_de_sante.gpkg"))
-        cs.to_file(os.path.join(output_dir, "src_cases_de_sante.gpkg"))
+        districts.to_file(
+            os.path.join(output_dir, "organisation_units", "districts.gpkg")
+        )
+        csi.to_file(
+            os.path.join(output_dir, "organisation_units", "centres_de_sante.gpkg")
+        )
+        cs.to_file(
+            os.path.join(output_dir, "organisation_units", "cases_de_sante.gpkg")
+        )
 
     population = load_population(
         src_file=population,
