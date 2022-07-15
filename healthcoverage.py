@@ -1075,7 +1075,7 @@ def count_population_total(boundaries: gpd.GeoDataFrame, population: str) -> pd.
 
         stats = zonal_stats(
             raster=src.read(1),
-            vectors=boundaries.geometry,
+            vectors=boundaries_reproj.geometry,
             stats=["sum"],
             affine=src.transform,
             nodata=src.nodata,
@@ -1122,13 +1122,20 @@ def calculate_population_covered(
 
         pop = src.read(1)
         coverage = boundaries.copy()
+        if coverage.crs != src.crs:
+            coverage = coverage.to_crs(src.crs)
 
         for distance in distances:
             data = []
-            covered = csi_reproj.buffer(distance).to_crs(src.crs)
+            covered = csi_reproj.buffer(distance)
+            if csi_reproj.crs != src.crs:
+                covered = covered.to_crs(src.crs)
             covered = covered.unary_union
             for i, row in coverage.iterrows():
                 covered_district = covered.intersection(row.geometry)
+                if covered_district.area == 0 or not covered_district.is_valid:
+                    data.append(0)
+                    continue
                 area_covered = rasterize(
                     [covered_district.__geo_interface__],
                     out_shape=pop.shape,
