@@ -1663,6 +1663,14 @@ def app():
         default=5000,
     )
 
+    modeling.add_argument(
+        "--skip-extension",
+        metavar="Calculer uniquement la couverture sanitaire",
+        action="store_true",
+        help="Arrêter la modélisation au calcul des statistiques de couverture sanitaire par district (pourcentage de population desservie).",
+        default=False,
+    )
+
     general.add_argument(
         "--output-dir",
         metavar="Dossier de sortie",
