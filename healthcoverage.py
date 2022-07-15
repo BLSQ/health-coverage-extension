@@ -52,6 +52,7 @@ def coverage(
     epsg: int,
     un_adj: bool = True,
     constrained: bool = True,
+    skip_extension: bool = False,
     overwrite: bool = False,
     show_progress: bool = False,
 ):
@@ -81,9 +82,9 @@ def coverage(
     )
 
     if write_org_units:
-        districts.to_file(os.path.join(output_dir, "districts.gpkg"))
-        csi.to_file(os.path.join(output_dir, "centres_de_sante.gpkg"))
-        cs.to_file(os.path.join(output_dir, "cases_de_sante.gpkg"))
+        districts.to_file(os.path.join(output_dir, "src_districts.gpkg"))
+        csi.to_file(os.path.join(output_dir, "src_centres_de_sante.gpkg"))
+        cs.to_file(os.path.join(output_dir, "src_cases_de_sante.gpkg"))
 
     population = load_population(
         src_file=population,
@@ -97,6 +98,30 @@ def coverage(
         dst_dir=os.path.join(output_dir, "population"),
         overwrite=overwrite,
     )
+
+    print("Calcule la population totale par district...", flush=True)
+    pop_total = count_population_total(boundaries=districts, population=population)
+    districts["population_total"] = pop_total
+
+    print("Calcule la couverture sanitaire pour chaque district...", flush=True)
+    districts = calculate_population_covered(
+        boundaries=districts,
+        column_population_count="population_total",
+        csi=csi,
+        population=population,
+        epsg=epsg,
+        distances=[5000, 10000, 15000],
+    )
+    districts.to_file(
+        os.path.join(output_dir, "population_coverage.gpkg"), driver="GPKG"
+    )
+    districts.drop(columns=["geometry"]).to_csv(
+        os.path.join(output_dir, "population_coverage.csv"), index=False
+    )
+
+    if skip_extension:
+        print("Modélisation terminée!")
+        return
 
     # remove old directory with population tiles if overwrite = True
     dst_dir = os.path.join(output_dir, "population", "tiles")
@@ -147,10 +172,16 @@ def coverage(
     column = f"population_{int(max_distance_served / 1000)}km"
     csi[column] = population_served_per_fosa(csi, served)
     csi.to_file(os.path.join(output_dir, "csi_population_served.gpkg"), driver="GPKG")
+    csi.drop(columns=["geometry"]).to_csv(
+        os.path.join(output_dir, "csi_population_served.csv"), index=False
+    )
 
     print("Calcule la population desservie par chaque CS...", flush=True)
     cs[column] = population_served_per_fosa(cs, served)
     cs.to_file(os.path.join(output_dir, "cs_population_served.gpkg"), driver="GPKG")
+    cs.drop(columns=["geometry"]).to_csv(
+        os.path.join(output_dir, "cs_population_served.csv"), index=False
+    )
 
     print("Analyse les zones potentielles d'extension...", flush=True)
     potential_areas = analyse_potential_areas(priority_areas, csi, epsg, min_population)
@@ -163,6 +194,9 @@ def coverage(
     potential_cs = analyse_cs(cs, csi, epsg)
     potential_cs.to_file(
         os.path.join(output_dir, "cs_extension_potential.gpkg"), driver="GPKG"
+    )
+    potential_cs.drop(columns=["geometry"]).to_csv(
+        os.path.join(output_dir, "cs_extension_potential.csv"), index=False
     )
 
     # shutil.rmtree(os.path.join(output_dir, "population_tiles"))
@@ -1014,6 +1048,105 @@ def compute_population_served(
     pop_sum = cv2.filter2D(src=pop, ddepth=-1, kernel=kernel).astype("int32")
     pop_sum[~district] = -1
     return pop_sum
+
+
+def count_population_total(boundaries: gpd.GeoDataFrame, population: str) -> pd.Series:
+    """Count total population per area.
+
+    Parameters
+    ----------
+    boundaries : geodataframe
+        Input districts/areas geometries.
+    population : str
+        Path to population raster (population per pixel).
+
+    Return
+    ------
+    series
+        Population count per district/area.
+    """
+    with rasterio.open(population) as src:
+
+        # boundaries geometries must be in same CRS as population raster
+        if boundaries.crs != src.crs:
+            boundaries_reproj = boundaries.to_crs(src.crs)
+        else:
+            boundaries_reproj = boundaries.copy()
+
+        stats = zonal_stats(
+            raster=src.read(1),
+            vectors=boundaries.geometry,
+            stats=["sum"],
+            affine=src.transform,
+            nodata=src.nodata,
+            all_touched=False,
+        )
+
+        pop_count = [stat["sum"] for stat in stats]
+        return pd.Series(data=pop_count, index=boundaries_reproj.index)
+
+
+def calculate_population_covered(
+    boundaries: gpd.GeoDataFrame,
+    column_population_count: str,
+    csi: gpd.GeoDataFrame,
+    population: str,
+    epsg: str,
+    distances: List[int] = [5000, 10000, 15000],
+) -> pd.DataFrame:
+    """Compute population covered for each district.
+
+    Parameters
+    ----------
+    boundaries : geodataframe
+        Input districts/areas.
+    column_population_count: str
+        Column name in boundaries with total population count for each area.
+    csi : geodataframe
+        Health centers.
+    population : str
+        Path to population raster.
+    epsg : int
+        EPSG code of coordinate reference system.
+    distances : list of int
+        Service distances in meters.
+
+    Return
+    ------
+    dataframe
+        Population covered count and ratio as a copy of the boundaries dataframe
+        with added columns.
+    """
+    csi_reproj = csi.to_crs(f"epsg:{epsg}")
+    with rasterio.open(population) as src:
+
+        pop = src.read(1)
+        coverage = boundaries.copy()
+
+        for distance in distances:
+            data = []
+            covered = csi_reproj.buffer(distance).to_crs(src.crs)
+            covered = covered.unary_union
+            for i, row in coverage.iterrows():
+                covered_district = covered.intersection(row.geometry)
+                area_covered = rasterize(
+                    [covered_district.__geo_interface__],
+                    out_shape=pop.shape,
+                    fill=0,
+                    default_value=1,
+                    dtype="uint8",
+                    transform=src.transform,
+                    all_touched=True,
+                )
+                pop_covered = pop[(area_covered == 1) & (pop != src.nodata)].sum()
+                data.append(pop_covered)
+
+            column = f"population_covered_{int(distance / 1000)}km"
+            coverage[column] = data
+            pop_covered_ratio = coverage[column] / boundaries[column_population_count]
+            coverage[f"{column}_ratio"] = pop_covered_ratio
+
+    return coverage
 
 
 def generate_population_served(
