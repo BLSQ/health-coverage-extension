@@ -144,6 +144,25 @@ def coverage(
             population, districts, output_dir=dst_dir, show_progress=show_progress
         )
 
+    # write buffer areas to disk
+    os.makedirs(os.path.join(output_dir, "buffer_areas"), exist_ok=True)
+    for dist in (5, 15):
+        # csi
+        gpd.GeoDataFrame(
+            geometry=csi.to_crs(f"epsg:{epsg}").buffer(dist * 1000)
+        ).dissolve().to_file(
+            os.path.join(output_dir, "buffer_areas", f"csi_buffer_{dist}km.gpkg"),
+            driver="GPKG",
+        )
+
+        # cs
+        gpd.GeoDataFrame(
+            geometry=cs.to_crs(f"epsg:{epsg}").buffer(dist * 1000)
+        ).dissolve().to_file(
+            os.path.join(output_dir, "buffer_areas", f"cs_buffer_{dist}km.gpkg"),
+            driver="GPKG",
+        )
+
     print("Calcule la population desservie...", flush=True)
     dst_file = os.path.join(output_dir, "intermediary", "population_served.tif")
     os.makedirs(os.path.dirname(dst_file), exist_ok=True)
