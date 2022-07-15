@@ -1079,7 +1079,7 @@ def count_population_total(boundaries: gpd.GeoDataFrame, population: str) -> pd.
             stats=["sum"],
             affine=src.transform,
             nodata=src.nodata,
-            all_touched=False,
+            all_touched=True,
         )
 
         pop_count = [stat["sum"] for stat in stats]
@@ -1440,6 +1440,7 @@ def analyse_potential_areas(
         data[data < min_population] = 0
         data[data >= min_population] = 1
         dst_transform = src.transform
+        dst_crs = src.crs
 
     # Vectorize continuous hot spots in priority areas raster
     # i.e. areas with pixels > min_population
@@ -1452,7 +1453,7 @@ def analyse_potential_areas(
 
     potential_areas = gpd.GeoDataFrame(index=[i for i in range(0, len(geoms))])
     potential_areas["geometry"] = geoms
-    potential_areas.crs = "EPSG:4326"
+    potential_areas.crs = dst_crs
 
     # Compute area in km2
     potential_areas["area"] = round(
