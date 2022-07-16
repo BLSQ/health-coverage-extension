@@ -93,6 +93,17 @@ def coverage(
             os.path.join(output_dir, "organisation_units", "cases_de_sante.gpkg")
         )
 
+    # copy qgis files
+    for fname in (
+        "healthcoverage.qgz",
+        "healthcoverage.qpt",
+        "healthcoverage_atlas.qgz",
+    ):
+        shutil.copyfile(
+            os.path.join(os.path.dirname(__file__), fname),
+            os.path.join(output_dir, fname),
+        )
+
     population = load_population(
         src_file=population,
         lon_column=population_lon,
