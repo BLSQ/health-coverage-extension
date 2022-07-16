@@ -100,7 +100,7 @@ def coverage(
         "healthcoverage_atlas.qgz",
     ):
         shutil.copyfile(
-            os.path.join(os.path.dirname(__file__), fname),
+            os.path.join(os.path.dirname(__file__), "files", fname),
             os.path.join(output_dir, fname),
         )
 
