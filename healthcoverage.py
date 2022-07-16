@@ -130,7 +130,7 @@ def coverage(
         epsg=epsg,
         distances=[5000, 10000, 15000],
     )
-    districts.to_file(
+    districts.to_crs(f"epsg:{epsg}").to_file(
         os.path.join(output_dir, "population_coverage.gpkg"), driver="GPKG", index=False
     )
     districts.drop(columns=["geometry"]).to_csv(
@@ -227,7 +227,7 @@ def coverage(
     print("Analyse les zones potentielles d'extension...", flush=True)
     potential_areas = analyse_potential_areas(priority_areas, csi, epsg, min_population)
     if not potential_areas.empty:
-        potential_areas.to_file(
+        potential_areas.to_crs(f"epsg:{epsg}").to_file(
             os.path.join(output_dir, "extension_areas.gpkg"), driver="GPKG"
         )
 
