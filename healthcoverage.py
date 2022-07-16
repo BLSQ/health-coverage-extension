@@ -120,7 +120,7 @@ def coverage(
         distances=[5000, 10000, 15000],
     )
     districts.to_file(
-        os.path.join(output_dir, "population_coverage.gpkg"), driver="GPKG"
+        os.path.join(output_dir, "population_coverage.gpkg"), driver="GPKG", index=False
     )
     districts.drop(columns=["geometry"]).to_csv(
         os.path.join(output_dir, "population_coverage.csv"), index=False
@@ -197,14 +197,18 @@ def coverage(
     print("Calcule la population desservie par chaque CSI...", flush=True)
     column = f"population_{int(max_distance_served / 1000)}km"
     csi[column] = population_served_per_fosa(csi, served)
-    csi.to_file(os.path.join(output_dir, "csi_population_served.gpkg"), driver="GPKG")
+    csi.to_crs(f"epsg:{epsg}").to_file(
+        os.path.join(output_dir, "csi_population_served.gpkg"), driver="GPKG"
+    )
     csi.drop(columns=["geometry"]).to_csv(
         os.path.join(output_dir, "csi_population_served.csv"), index=False
     )
 
     print("Calcule la population desservie par chaque CS...", flush=True)
     cs[column] = population_served_per_fosa(cs, served)
-    cs.to_file(os.path.join(output_dir, "cs_population_served.gpkg"), driver="GPKG")
+    cs.to_crs(f"epsg:{epsg}").to_file(
+        os.path.join(output_dir, "cs_population_served.gpkg"), driver="GPKG"
+    )
     cs.drop(columns=["geometry"]).to_csv(
         os.path.join(output_dir, "cs_population_served.csv"), index=False
     )
@@ -218,7 +222,7 @@ def coverage(
 
     print("Analyse le potentiel d'extension des CS...", flush=True)
     potential_cs = analyse_cs(cs, csi, epsg)
-    potential_cs.to_file(
+    potential_cs.to_crs(f"epsg:{epsg}").to_file(
         os.path.join(output_dir, "cs_extension_potential.gpkg"), driver="GPKG"
     )
     potential_cs.drop(columns=["geometry"]).to_csv(
