@@ -232,7 +232,7 @@ def coverage(
         )
 
     print("Analyse le potentiel d'extension des CS...", flush=True)
-    potential_cs = analyse_cs(cs, csi, epsg)
+    potential_cs = analyse_cs(cs, csi, districts, column, epsg)
     potential_cs.to_crs(f"epsg:{epsg}").to_file(
         os.path.join(output_dir, "cs_extension_potential.gpkg"), driver="GPKG"
     )
@@ -1520,7 +1520,11 @@ def analyse_potential_areas(
 
 
 def analyse_cs(
-    cs: gpd.GeoDataFrame, csi: gpd.GeoDataFrame, epsg: int = 32632
+    cs: gpd.GeoDataFrame,
+    csi: gpd.GeoDataFrame,
+    districts: gpd.GeoDataFrame,
+    column: str,
+    epsg: int = 32632,
 ) -> gpd.GeoDataFrame:
     """Analyse cases de santé for extension.
 
@@ -1548,7 +1552,25 @@ def analyse_cs(
         else:
             distance_csi.append(None)
     cs["distance_nearest_csi"] = distance_csi
-    return cs[cs.distance_nearest_csi >= 15]
+    cs = cs[cs.distance_nearest_csi >= 15]
+
+    # add total population in district to CS dataframe
+    if districts.crs != cs.crs:
+        districts = districts.to_crs(cs.crs)
+
+    def _get_pop_in_district(geom, districts):
+
+        districts_ = districts[districts.contains(geom)]
+        if len(districts_) == 0:
+            return 0
+        return districts_.population_total.values[0]
+
+    cs["population_in_district"] = cs.geometry.apply(
+        lambda geom: _get_pop_in_district(geom, districts)
+    )
+    cs["coverage_impact"] = cs[column] / cs["population_in_district"]
+
+    return cs
 
 
 @Gooey(
